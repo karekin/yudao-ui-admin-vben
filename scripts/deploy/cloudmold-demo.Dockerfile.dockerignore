@@ -1,0 +1,8 @@
+**
+!apps
+!apps/web-antd
+!apps/web-antd/dist
+!apps/web-antd/dist/**
+!scripts
+!scripts/deploy
+!scripts/deploy/cloudmold-demo.nginx.conf

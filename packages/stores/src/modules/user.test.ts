@@ -15,16 +15,17 @@ describe('useUserStore', () => {
     expect(store.userInfo).toEqual(userInfo);
   });
 
-  // 测试重置用户信息时的行为
-  it('clears userInfo and userRoles when setting null userInfo', () => {
+  // 测试退出登录重置 Store 时的行为
+  it('clears userInfo and userRoles when resetting the store', () => {
     const store = useUserStore();
     store.setUserInfo({
-      roles: [{ roleName: 'User', value: 'user' }],
+      nickname: 'User',
     } as any);
+    store.setUserRoles(['user']);
     expect(store.userInfo).not.toBeNull();
     expect(store.userRoles.length).toBeGreaterThan(0);
 
-    store.setUserInfo(null as any);
+    store.$reset();
     expect(store.userInfo).toBeNull();
     expect(store.userRoles).toEqual([]);
   });
