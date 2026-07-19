@@ -24,6 +24,15 @@ const routes: RouteRecordRaw[] = [
           authority: ['cloudmold:catalog:query'],
         },
       },
+      {
+        path: 'inventory',
+        name: 'CloudMoldInventory',
+        component: () => import('#/views/cloudmold/inventory/index.vue'),
+        meta: {
+          title: '规范库存',
+          authority: ['cloudmold:inventory:query'],
+        },
+      },
     ],
   },
 ];
