@@ -70,6 +70,26 @@ const routes: RouteRecordRaw[] = [
           authority: ['cloudmold:token-platform:query'],
         },
       },
+      {
+        path: 'operations-alert',
+        name: 'CloudMoldOperationsAlert',
+        component: () =>
+          import('#/views/cloudmold/operations-intelligence/index.vue'),
+        meta: {
+          title: '运营告警',
+          authority: ['cloudmold:operations-intelligence:query'],
+        },
+      },
+      {
+        path: 'commerce-behavior-event',
+        name: 'CloudMoldCommerceBehaviorEvent',
+        component: () =>
+          import('#/views/cloudmold/commerce-behavior/index.vue'),
+        meta: {
+          title: '交易行为',
+          authority: ['cloudmold:commerce-behavior:query'],
+        },
+      },
     ],
   },
 ];
