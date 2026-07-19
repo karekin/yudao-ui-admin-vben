@@ -110,5 +110,12 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       minWidth: 170,
       formatter: 'formatDateTime',
     },
+    {
+      field: 'action',
+      fixed: 'right',
+      minWidth: 80,
+      slots: { default: 'action' },
+      title: '操作',
+    },
   ];
 }

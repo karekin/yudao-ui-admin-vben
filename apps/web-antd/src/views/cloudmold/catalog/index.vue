@@ -2,7 +2,11 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CloudMoldCatalogApi } from '#/api/cloudmold/catalog';
 
+import { ref } from 'vue';
+
 import { Page } from '@vben/common-ui';
+
+import { Button } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getCloudMoldCatalogSkuPage } from '#/api/cloudmold/catalog';
@@ -11,8 +15,17 @@ import CopyIdCell from '../shared/copy-id-cell.vue';
 import EvidenceAlert from '../shared/evidence-alert.vue';
 import StatusTag from '../shared/status-tag.vue';
 import { catalogStatusMeta, useGridColumns, useGridFormSchema } from './data';
+import DetailDrawer from './detail-drawer.vue';
 
 defineOptions({ name: 'CloudMoldCatalog' });
+
+const detailOpen = ref(false);
+const detailSkuId = ref<null | string>(null);
+
+function openDetail(skuId: string) {
+  detailSkuId.value = skuId;
+  detailOpen.value = true;
+}
 
 const [Grid] = useVbenVxeGrid({
   formOptions: {
@@ -67,6 +80,17 @@ function getStatusMeta(status: number) {
       <template #catalog-status="{ row }">
         <StatusTag v-bind="getStatusMeta(row.catalogStatus)" />
       </template>
+      <template #action="{ row }">
+        <Button
+          type="link"
+          size="small"
+          @click="openDetail(row.canonicalSkuId)"
+        >
+          详情
+        </Button>
+      </template>
     </Grid>
+
+    <DetailDrawer v-model:open="detailOpen" :sku-id="detailSkuId" />
   </Page>
 </template>

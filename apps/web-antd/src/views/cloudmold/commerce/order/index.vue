@@ -2,7 +2,11 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CloudMoldCommerceApi } from '#/api/cloudmold/commerce';
 
+import { ref } from 'vue';
+
 import { Page } from '@vben/common-ui';
+
+import { Button } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getCloudMoldOrderPage } from '#/api/cloudmold/commerce';
@@ -12,8 +16,17 @@ import EvidenceAlert from '../../shared/evidence-alert.vue';
 import StatusTag from '../../shared/status-tag.vue';
 import { commerceStatusColor } from '../status';
 import { useOrderColumns, useOrderFormSchema } from './data';
+import DetailDrawer from './detail-drawer.vue';
 
 defineOptions({ name: 'CloudMoldCommerceOrder' });
+
+const detailOpen = ref(false);
+const detailOrderId = ref<null | string>(null);
+
+function openDetail(orderId: string) {
+  detailOrderId.value = orderId;
+  detailOpen.value = true;
+}
 
 const [Grid] = useVbenVxeGrid({
   formOptions: { schema: useOrderFormSchema() },
@@ -53,6 +66,13 @@ const [Grid] = useVbenVxeGrid({
           :label="row.status"
         />
       </template>
+      <template #action="{ row }">
+        <Button type="link" size="small" @click="openDetail(row.orderId)">
+          详情
+        </Button>
+      </template>
     </Grid>
+
+    <DetailDrawer v-model:open="detailOpen" :order-id="detailOrderId" />
   </Page>
 </template>

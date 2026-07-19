@@ -51,6 +51,56 @@ export namespace CloudMoldCommerceApi {
     refundId?: string;
   }
 
+  export interface OrderDetailItem {
+    canonicalSkuId: string;
+    channelCode?: string;
+    createdAt: string;
+    discountAmountMinor?: number;
+    lineAmountMinor?: number;
+    lineKey?: string;
+    listingId?: string;
+    listingOfferId?: string;
+    listingRevision?: number;
+    listingVersion?: number;
+    merchandiseCostMinor?: number;
+    netAmountMinor?: number;
+    orderItemId: string;
+    quantity: string;
+    reservationId?: string;
+    shopId?: string;
+    unitPriceMinor?: number;
+    updatedAt: string;
+  }
+
+  export interface OrderDetail {
+    aggregateVersion: number;
+    buyerId: string;
+    cancellationResponsibilityCode?: string;
+    cancellationResponsibilityParty?: string;
+    cancellationSagaId?: string;
+    createdAt: string;
+    currencyCode: string;
+    discountAmountMinor: number;
+    fulfillmentId?: string;
+    fulfillmentStatus?: string;
+    itemCount: number;
+    items: OrderDetailItem[];
+    orderId: string;
+    orderNo: string;
+    payableAmountMinor: number;
+    paymentId?: string;
+    paymentStatus?: string;
+    preCancellationStatus?: string;
+    productAmountMinor: number;
+    refundId?: string;
+    runId?: string;
+    shippingAmountMinor: number;
+    shipmentId?: string;
+    status: string;
+    totalQuantity: string;
+    updatedAt: string;
+  }
+
   export interface Payment {
     aggregateVersion: number;
     capturedAmountMinor: number;
@@ -167,6 +217,14 @@ export function getCloudMoldOrderPage(
   return requestClient.get<PageResult<CloudMoldCommerceApi.Order>>(
     '/cloudmold/order/page',
     { params },
+  );
+}
+
+/** 查询单个规范订单详情（含订单行），不读取 yudao Trade 表。 */
+export function getCloudMoldOrderDetail(orderId: string) {
+  return requestClient.get<CloudMoldCommerceApi.OrderDetail | null>(
+    '/cloudmold/order/get',
+    { params: { orderId } },
   );
 }
 
