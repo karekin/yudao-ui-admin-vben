@@ -34,6 +34,24 @@ const routes: RouteRecordRaw[] = [
           authority: ['cloudmold:customer-service:query'],
         },
       },
+      {
+        path: 'promotion-campaign',
+        name: 'CloudMoldPromotionCampaign',
+        component: () => import('#/views/cloudmold/promotion/index.vue'),
+        meta: {
+          title: '营销活动',
+          authority: ['cloudmold:promotion:query'],
+        },
+      },
+      {
+        path: 'engagement-campaign',
+        name: 'CloudMoldEngagementCampaign',
+        component: () => import('#/views/cloudmold/engagement/index.vue'),
+        meta: {
+          title: '通知活动',
+          authority: ['cloudmold:engagement:notification:query'],
+        },
+      },
     ],
   },
 ];
