@@ -52,6 +52,24 @@ const routes: RouteRecordRaw[] = [
           authority: ['cloudmold:engagement:notification:query'],
         },
       },
+      {
+        path: 'gamification-account',
+        name: 'CloudMoldGamificationAccount',
+        component: () => import('#/views/cloudmold/gamification/index.vue'),
+        meta: {
+          title: '游戏币账户',
+          authority: ['cloudmold:gamification:query'],
+        },
+      },
+      {
+        path: 'token-platform-account',
+        name: 'CloudMoldTokenPlatformAccount',
+        component: () => import('#/views/cloudmold/token-platform/index.vue'),
+        meta: {
+          title: 'Token 配额账户',
+          authority: ['cloudmold:token-platform:query'],
+        },
+      },
     ],
   },
 ];
