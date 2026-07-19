@@ -43,6 +43,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'warehouse',
+        name: 'CloudMoldWarehouse',
+        component: () => import('#/views/cloudmold/warehouse/index.vue'),
+        meta: {
+          title: '规范仓网',
+          authority: ['cloudmold:warehouse:query'],
+        },
+      },
+      {
         path: 'commerce',
         name: 'CloudMoldCommerce',
         component: () => import('#/views/cloudmold/commerce/index.vue'),
