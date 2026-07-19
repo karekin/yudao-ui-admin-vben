@@ -2,7 +2,11 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CloudMoldCommerceApi } from '#/api/cloudmold/commerce';
 
+import { ref } from 'vue';
+
 import { Page } from '@vben/common-ui';
+
+import { Button } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getCloudMoldAfterSalePage } from '#/api/cloudmold/commerce';
@@ -12,8 +16,17 @@ import EvidenceAlert from '../../shared/evidence-alert.vue';
 import StatusTag from '../../shared/status-tag.vue';
 import { commerceStatusColor } from '../status';
 import { useAfterSaleColumns, useAfterSaleFormSchema } from './data';
+import DetailDrawer from './detail-drawer.vue';
 
 defineOptions({ name: 'CloudMoldCommerceAfterSale' });
+
+const detailOpen = ref(false);
+const detailAfterSaleId = ref<null | string>(null);
+
+function openDetail(afterSaleId: string) {
+  detailAfterSaleId.value = afterSaleId;
+  detailOpen.value = true;
+}
 
 const [Grid] = useVbenVxeGrid({
   formOptions: { schema: useAfterSaleFormSchema() },
@@ -53,6 +66,16 @@ const [Grid] = useVbenVxeGrid({
           :label="row.caseStatus"
         />
       </template>
+      <template #action="{ row }">
+        <Button type="link" size="small" @click="openDetail(row.afterSaleId)">
+          详情
+        </Button>
+      </template>
     </Grid>
+
+    <DetailDrawer
+      v-model:open="detailOpen"
+      :after-sale-id="detailAfterSaleId"
+    />
   </Page>
 </template>

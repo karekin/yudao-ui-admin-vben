@@ -31,6 +31,58 @@ export namespace CloudMoldInventoryApi {
     warehouseName: string;
   }
 
+  export interface BalanceAllocationItem {
+    allocationId: string;
+    quantity: string;
+    reservationId: string;
+    status: number;
+    version: number;
+  }
+
+  export interface BalanceDetail {
+    activeAllocations: BalanceAllocationItem[];
+    aggregateVersion: number;
+    allocationEligibility: string;
+    allocatableQuantity: string;
+    availableQuantity: string;
+    balanceId: string;
+    baseUomCode: string;
+    canonicalSkuId: string;
+    createdAt: string;
+    inTransitQuantity: string;
+    locationCode: string;
+    locationId: string;
+    locationName: string;
+    lotCode?: string;
+    lotId?: string;
+    onHandQuantity: string;
+    ownerId: string;
+    ownerType: string;
+    qualityStatus: string;
+    recentLedgerEntries: BalanceLedgerItem[];
+    reservedQuantity: string;
+    skuCode: string;
+    spuCode: string;
+    stockStatus: string;
+    updatedAt: string;
+    warehouseCode: string;
+    warehouseId: string;
+    warehouseName: string;
+  }
+
+  export interface BalanceLedgerItem {
+    afterOnHandQuantity: string;
+    businessNo?: string;
+    businessType?: string;
+    commandType?: string;
+    deltaInTransitQuantity: string;
+    deltaOnHandQuantity: string;
+    deltaReservedQuantity: string;
+    entryRole?: string;
+    ledgerEntryId: number;
+    occurredAt: string;
+  }
+
   export interface BalancePageParams extends PageParam {
     locationCode?: string;
     lotCode?: string;
@@ -148,6 +200,14 @@ export function getCloudMoldInventoryBalancePage(
   return requestClient.get<PageResult<CloudMoldInventoryApi.Balance>>(
     '/cloudmold/inventory/v3/balances/page',
     { params },
+  );
+}
+
+/** 查询单个规范库存余额详情（含最近流水与活跃预占），不读取 yudao ERP/WMS 表。 */
+export function getCloudMoldInventoryBalanceDetail(balanceId: string) {
+  return requestClient.get<CloudMoldInventoryApi.BalanceDetail | null>(
+    '/cloudmold/inventory/v3/balances/get-detail',
+    { params: { balanceId } },
   );
 }
 

@@ -2,9 +2,11 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CloudMoldInventoryApi } from '#/api/cloudmold/inventory';
 
+import { ref } from 'vue';
+
 import { Page } from '@vben/common-ui';
 
-import { Tabs } from 'ant-design-vue';
+import { Button, Tabs } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
@@ -15,6 +17,7 @@ import {
 
 import EvidenceAlert from '../shared/evidence-alert.vue';
 import StatusTag from '../shared/status-tag.vue';
+import BalanceDetailDrawer from './balance-detail-drawer.vue';
 import {
   qualityStatusMeta,
   reservationStatusMeta,
@@ -44,6 +47,14 @@ function formatDecimal(value: unknown) {
 
 function getMeta(metadata: StatusMeta, status: number | string) {
   return metadata[status] ?? { color: 'default', label: String(status) };
+}
+
+const balanceDetailOpen = ref(false);
+const detailBalanceId = ref<null | string>(null);
+
+function openBalanceDetail(balanceId: string) {
+  detailBalanceId.value = balanceId;
+  balanceDetailOpen.value = true;
 }
 
 const [BalanceGrid] = useVbenVxeGrid({
@@ -127,6 +138,15 @@ const [LedgerGrid] = useVbenVxeGrid({
           <template #quantity="{ row, column }">
             {{ formatDecimal(getFieldValue(row, column.field)) }}
           </template>
+          <template #action="{ row }">
+            <Button
+              type="link"
+              size="small"
+              @click="openBalanceDetail(row.balanceId)"
+            >
+              详情
+            </Button>
+          </template>
         </BalanceGrid>
       </Tabs.TabPane>
 
@@ -154,5 +174,10 @@ const [LedgerGrid] = useVbenVxeGrid({
         </LedgerGrid>
       </Tabs.TabPane>
     </Tabs>
+
+    <BalanceDetailDrawer
+      v-model:open="balanceDetailOpen"
+      :balance-id="detailBalanceId"
+    />
   </Page>
 </template>

@@ -200,6 +200,55 @@ export namespace CloudMoldCommerceApi {
     updatedAt: string;
   }
 
+  export interface AfterSaleDetailItem {
+    afterSaleItemId: string;
+    canonicalSkuId: string;
+    createdAt: string;
+    discountAmountMinor?: number;
+    lineAmountMinor?: number;
+    listingId?: string;
+    listingOfferId?: string;
+    netAmountMinor?: number;
+    orderItemId: string;
+    quantity: string;
+  }
+
+  export interface AfterSaleDetail {
+    aggregateVersion: number;
+    afterSaleId: string;
+    afterSaleNo: string;
+    afterSaleType: string;
+    approvedAmountMinor?: number;
+    buyerId?: string;
+    caseStatus: string;
+    completedAt?: string;
+    createdAt: string;
+    currencyCode: string;
+    forwardFulfillmentId?: string;
+    items: AfterSaleDetailItem[];
+    orderId: string;
+    orderNo: string;
+    ownerId?: string;
+    paymentId?: string;
+    reason?: string;
+    reasonCode: string;
+    refundStatus: string;
+    resolutionSagaActiveStep?: string;
+    resolutionSagaAttemptCount?: number;
+    resolutionSagaId?: string;
+    resolutionSagaLastErrorCode?: string;
+    resolutionSagaLastErrorMessage?: string;
+    resolutionSagaMaxAttempts?: number;
+    resolutionSagaStatus?: string;
+    responsibility?: string;
+    reviewerId?: string;
+    returnFulfillmentId?: string;
+    returnFulfillmentStatus?: string;
+    uomCode?: string;
+    updatedAt: string;
+    warehouseId?: string;
+  }
+
   export interface ListingPageParams extends PageParam {
     channelCode?: string;
     listingNo?: string;
@@ -304,5 +353,17 @@ export function getCloudMoldAfterSalePage(
   return requestClient.get<PageResult<CloudMoldCommerceApi.AfterSale>>(
     '/cloudmold/aftersale/page',
     { params },
+  );
+}
+
+/**
+ * 查询单个规范售后详情（含售后行）。
+ *
+ * 注意：路径用 /get-detail 而非 /get——后者已被 AfterSaleCommandController 占用（返回 AfterSaleView）。
+ */
+export function getCloudMoldAfterSaleDetail(afterSaleId: string) {
+  return requestClient.get<CloudMoldCommerceApi.AfterSaleDetail | null>(
+    '/cloudmold/aftersale/get-detail',
+    { params: { afterSaleId } },
   );
 }

@@ -171,6 +171,13 @@ export function useBalanceColumns(): VxeTableGridOptions['columns'] {
       minWidth: 170,
       title: '更新时间',
     },
+    {
+      field: 'action',
+      fixed: 'right',
+      minWidth: 80,
+      slots: { default: 'action' },
+      title: '操作',
+    },
   ];
 }
 
