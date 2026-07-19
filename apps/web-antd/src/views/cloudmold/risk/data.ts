@@ -1,0 +1,46 @@
+import type { VbenFormSchema } from '#/adapter/form';
+import type { VxeTableGridOptions } from '#/adapter/vxe-table';
+
+import { codeInput, statusInput, timeColumn } from '../shared/form-helpers';
+
+export const reviewStatusMeta: Record<
+  string,
+  { color: string; label: string }
+> = {
+  CLOSED: { color: 'default', label: '已关闭' },
+  DECIDED: { color: 'success', label: '已决策' },
+  IN_REVIEW: { color: 'processing', label: '审核中' },
+  OPEN: { color: 'warning', label: '待处理' },
+};
+
+export function useRiskReviewFormSchema(): VbenFormSchema[] {
+  return [
+    codeInput('caseId', '案例 ID'),
+    codeInput('clusterId', '集群 ID'),
+    codeInput('reviewerPrincipalId', '审核员主体'),
+    statusInput(),
+  ];
+}
+
+export function useRiskReviewColumns(): VxeTableGridOptions['columns'] {
+  return [
+    {
+      field: 'caseId',
+      fixed: 'left',
+      minWidth: 220,
+      slots: { default: 'case-id' },
+      title: '案例 ID',
+    },
+    { field: 'clusterId', minWidth: 220, title: '集群 ID' },
+    {
+      field: 'status',
+      minWidth: 120,
+      slots: { default: 'status' },
+      title: '状态',
+    },
+    { field: 'reviewerPrincipalId', minWidth: 180, title: '审核员主体' },
+    { field: 'aggregateVersion', minWidth: 80, title: '版本' },
+    timeColumn('createdAt', '创建时间'),
+    timeColumn('updatedAt', '更新时间'),
+  ];
+}
