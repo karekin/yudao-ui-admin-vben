@@ -2,11 +2,12 @@ import type { PageParam, PageResult } from '@vben/request';
 
 import { requestClient } from '#/api/request';
 
-/** 营销活动状态转换命令 operation（对齐后端 PromotionOperation 枚举） */
+/** 营销活动命令 operation（对齐后端 PromotionOperation 枚举） */
 export const PromotionCampaignOperation = {
   ACTIVATE_CAMPAIGN: 'ACTIVATE_CAMPAIGN',
   CANCEL_CAMPAIGN: 'CANCEL_CAMPAIGN',
   COMPLETE_CAMPAIGN: 'COMPLETE_CAMPAIGN',
+  CREATE_CAMPAIGN: 'CREATE_CAMPAIGN',
   PAUSE_CAMPAIGN: 'PAUSE_CAMPAIGN',
 } as const;
 
@@ -25,8 +26,10 @@ export namespace CloudMoldPromotionApi {
   }
 
   export interface CampaignCommandRequest {
-    campaign: CampaignTransitionTarget;
+    campaign: CampaignDefinition;
+    correlationId: string;
     idempotencyKey: string;
+    occurredAt: string;
     operation: string;
   }
 
@@ -39,6 +42,24 @@ export namespace CloudMoldPromotionApi {
     status: string;
   }
 
+  export interface CampaignCreateInput {
+    campaignCode: string;
+    campaignKind: string;
+    endsAt: string;
+    name: string;
+    startsAt: string;
+  }
+
+  export interface CampaignDefinition {
+    campaignCode?: string;
+    campaignId?: string;
+    campaignKind?: string;
+    endsAt?: string;
+    expectedVersion?: number;
+    name?: string;
+    startsAt?: string;
+  }
+
   export interface CampaignPageParams extends PageParam {
     campaignCode?: string;
     campaignId?: string;
@@ -48,43 +69,44 @@ export namespace CloudMoldPromotionApi {
     name?: string;
     status?: string;
   }
-
-  export interface CampaignTransitionTarget {
-    campaignId: string;
-    expectedVersion: number;
-  }
 }
 
 /** 激活活动：DRAFT/PAUSED → ACTIVE */
 export function activateCampaign(campaignId: string, expectedVersion: number) {
   return sendPromotionCampaignCommand(
-    buildCampaignTransition(
-      PromotionCampaignOperation.ACTIVATE_CAMPAIGN,
+    buildPromotionCommand(PromotionCampaignOperation.ACTIVATE_CAMPAIGN, {
       campaignId,
       expectedVersion,
-    ),
+    }),
   );
 }
 
 /** 取消活动：DRAFT/ACTIVE/PAUSED → CANCELLED（不可恢复） */
 export function cancelCampaign(campaignId: string, expectedVersion: number) {
   return sendPromotionCampaignCommand(
-    buildCampaignTransition(
-      PromotionCampaignOperation.CANCEL_CAMPAIGN,
+    buildPromotionCommand(PromotionCampaignOperation.CANCEL_CAMPAIGN, {
       campaignId,
       expectedVersion,
-    ),
+    }),
   );
 }
 
 /** 完成活动：ACTIVE/PAUSED → COMPLETED */
 export function completeCampaign(campaignId: string, expectedVersion: number) {
   return sendPromotionCampaignCommand(
-    buildCampaignTransition(
-      PromotionCampaignOperation.COMPLETE_CAMPAIGN,
+    buildPromotionCommand(PromotionCampaignOperation.COMPLETE_CAMPAIGN, {
       campaignId,
       expectedVersion,
-    ),
+    }),
+  );
+}
+
+/** 新建活动：创建为 DRAFT（version=1，campaignId 由后端生成） */
+export function createCampaign(
+  input: CloudMoldPromotionApi.CampaignCreateInput,
+) {
+  return sendPromotionCampaignCommand(
+    buildPromotionCommand(PromotionCampaignOperation.CREATE_CAMPAIGN, input),
   );
 }
 
@@ -100,11 +122,10 @@ export function getCloudMoldPromotionCampaignPage(
 /** 暂停活动：ACTIVE → PAUSED */
 export function pauseCampaign(campaignId: string, expectedVersion: number) {
   return sendPromotionCampaignCommand(
-    buildCampaignTransition(
-      PromotionCampaignOperation.PAUSE_CAMPAIGN,
+    buildPromotionCommand(PromotionCampaignOperation.PAUSE_CAMPAIGN, {
       campaignId,
       expectedVersion,
-    ),
+    }),
   );
 }
 
@@ -118,15 +139,16 @@ export function sendPromotionCampaignCommand(
   );
 }
 
-/** 组装状态转换命令：每次生成新幂等键，回传乐观版本号 */
-function buildCampaignTransition(
+/** 组装命令：补全幂等键 + envelope（correlationId/occurredAt 后端 validateEnvelope 强制要求） */
+function buildPromotionCommand(
   operation: (typeof PromotionCampaignOperation)[keyof typeof PromotionCampaignOperation],
-  campaignId: string,
-  expectedVersion: number,
+  campaign: CloudMoldPromotionApi.CampaignDefinition,
 ): CloudMoldPromotionApi.CampaignCommandRequest {
   return {
-    campaign: { campaignId, expectedVersion },
+    campaign,
+    correlationId: crypto.randomUUID(),
     idempotencyKey: crypto.randomUUID(),
+    occurredAt: new Date().toISOString(),
     operation,
   };
 }

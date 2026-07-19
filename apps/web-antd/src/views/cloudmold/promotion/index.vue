@@ -2,11 +2,11 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CloudMoldPromotionApi } from '#/api/cloudmold/promotion';
 
-import { Page } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 
 import { message } from 'ant-design-vue';
 
-import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
+import { ACTION_ICON, TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   activateCampaign,
   cancelCampaign,
@@ -24,6 +24,7 @@ import {
   usePromotionCampaignColumns,
   usePromotionCampaignFormSchema,
 } from './data';
+import Form from './modules/form.vue';
 
 defineOptions({ name: 'CloudMoldPromotionCampaign' });
 
@@ -32,6 +33,11 @@ type StatusMeta = Record<string, { color: string; label: string }>;
 function getMeta(metadata: StatusMeta, status: string) {
   return metadata[status] ?? { color: 'default', label: status };
 }
+
+const [FormModal, formModalApi] = useVbenModal({
+  connectedComponent: Form,
+  destroyOnClose: true,
+});
 
 const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: { schema: usePromotionCampaignFormSchema() },
@@ -52,6 +58,10 @@ const [Grid, gridApi] = useVbenVxeGrid({
     toolbarConfig: { refresh: true, search: true },
   } as VxeTableGridOptions<CloudMoldPromotionApi.Campaign>,
 });
+
+function handleCreate() {
+  formModalApi.setData(null).open();
+}
 
 function handleRefresh() {
   gridApi.query();
@@ -109,10 +119,24 @@ function handlePause(row: CloudMoldPromotionApi.Campaign) {
   <Page auto-content-height>
     <EvidenceAlert
       message="CloudMold 规范营销活动权威"
-      description="本页读取 CloudMold Promotion 营销活动，并支持状态转换（幂等命令 + 乐观版本）；活动、券模板、广告投放、实验结果彼此分离，不读取 yudao Mall/Promotion 业务表。"
+      description="本页读取 CloudMold Promotion 营销活动，并支持新建与状态转换（幂等命令 + 乐观版本）；活动、券模板、广告投放、实验结果彼此分离，不读取 yudao Mall/Promotion 业务表。"
     />
 
+    <FormModal @success="handleRefresh" />
     <Grid table-title="规范营销活动">
+      <template #toolbar-tools>
+        <TableAction
+          :actions="[
+            {
+              auth: ['cloudmold:promotion:command'],
+              icon: ACTION_ICON.ADD,
+              label: '新建活动',
+              onClick: handleCreate,
+              type: 'primary',
+            },
+          ]"
+        />
+      </template>
       <template #campaign-id="{ row }">
         <CopyIdCell :value="row.campaignId" label="活动 ID" />
       </template>

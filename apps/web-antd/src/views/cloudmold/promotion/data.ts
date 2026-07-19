@@ -23,6 +23,54 @@ export const PromotionCampaignStatus = {
   PAUSED: 'PAUSED',
 };
 
+export function usePromotionCampaignCreateFormSchema(): VbenFormSchema[] {
+  return [
+    {
+      component: 'Input',
+      componentProps: { maxLength: 64, placeholder: '请输入活动编码' },
+      fieldName: 'campaignCode',
+      label: '活动编码',
+      rules: 'required',
+    },
+    {
+      component: 'Select',
+      componentProps: {
+        options: [
+          { label: '促销活动', value: 'ACTIVITY' },
+          { label: '券活动', value: 'COUPON' },
+          { label: '广告投放', value: 'ADVERTISING' },
+          { label: '通用', value: 'GENERAL' },
+        ],
+        placeholder: '请选择活动类型',
+      },
+      fieldName: 'campaignKind',
+      label: '活动类型',
+      rules: 'required',
+    },
+    {
+      component: 'Input',
+      componentProps: { maxLength: 128, placeholder: '请输入活动名称' },
+      fieldName: 'name',
+      label: '活动名称',
+      rules: 'required',
+    },
+    {
+      component: 'DatePicker',
+      componentProps: { format: 'YYYY-MM-DD HH:mm:ss', showTime: true },
+      fieldName: 'startsAt',
+      label: '开始时间',
+      rules: 'required',
+    },
+    {
+      component: 'DatePicker',
+      componentProps: { format: 'YYYY-MM-DD HH:mm:ss', showTime: true },
+      fieldName: 'endsAt',
+      label: '结束时间',
+      rules: 'required',
+    },
+  ];
+}
+
 export function usePromotionCampaignFormSchema(): VbenFormSchema[] {
   return [
     codeInput('campaignId', '活动 ID'),
