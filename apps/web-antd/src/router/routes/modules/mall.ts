@@ -107,4 +107,10 @@ const routes: RouteRecordRaw[] = [
   },
 ];
 
-export default routes;
+// CloudMold keeps the upstream route definitions mergeable, but the legacy
+// domain pages are disabled by default after their canonical replacements land.
+// Set VITE_CLOUDMOLD_LEGACY_DOMAIN_ROUTES=true only for a bounded rollback.
+const legacyDomainRoutesEnabled =
+  import.meta.env.VITE_CLOUDMOLD_LEGACY_DOMAIN_ROUTES === 'true';
+
+export default legacyDomainRoutesEnabled ? routes : [];
