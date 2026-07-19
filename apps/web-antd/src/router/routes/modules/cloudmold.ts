@@ -33,6 +33,21 @@ const routes: RouteRecordRaw[] = [
           authority: ['cloudmold:inventory:query'],
         },
       },
+      {
+        path: 'commerce',
+        name: 'CloudMoldCommerce',
+        component: () => import('#/views/cloudmold/commerce/index.vue'),
+        meta: {
+          title: '规范交易与履约',
+          authority: [
+            'cloudmold:listing:query',
+            'cloudmold:order:query',
+            'cloudmold:payment:query',
+            'cloudmold:fulfillment:query',
+            'cloudmold:aftersale:query',
+          ],
+        },
+      },
     ],
   },
 ];
