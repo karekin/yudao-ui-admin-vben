@@ -52,6 +52,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'identity',
+        name: 'CloudMoldIdentity',
+        component: () => import('#/views/cloudmold/identity/index.vue'),
+        meta: {
+          title: '规范身份',
+          authority: ['cloudmold:identity:query'],
+        },
+      },
+      {
         path: 'commerce',
         name: 'CloudMoldCommerce',
         component: () => import('#/views/cloudmold/commerce/index.vue'),
