@@ -108,6 +108,24 @@ const routes: RouteRecordRaw[] = [
           authority: ['cloudmold:data-readiness:query'],
         },
       },
+      {
+        path: 'ai-workflow-run',
+        name: 'CloudMoldAiWorkflowRun',
+        component: () => import('#/views/cloudmold/ai-operations/index.vue'),
+        meta: {
+          title: 'AI 工作流运行',
+          authority: ['cloudmold:ai-operations:query'],
+        },
+      },
+      {
+        path: 'dreamplant-exploration',
+        name: 'CloudMoldDreamPlantExploration',
+        component: () => import('#/views/cloudmold/dreamplant/index.vue'),
+        meta: {
+          title: 'DreamPlant 探索',
+          authority: ['cloudmold:dreamplant:query'],
+        },
+      },
     ],
   },
 ];
