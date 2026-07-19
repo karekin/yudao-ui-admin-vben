@@ -11,6 +11,7 @@ export const PromotionCampaignOperation = {
   COMPLETE_CAMPAIGN: 'COMPLETE_CAMPAIGN',
   CREATE_CAMPAIGN: 'CREATE_CAMPAIGN',
   PAUSE_CAMPAIGN: 'PAUSE_CAMPAIGN',
+  UPDATE_CAMPAIGN: 'UPDATE_CAMPAIGN',
 } as const;
 
 export namespace CloudMoldPromotionApi {
@@ -70,6 +71,15 @@ export namespace CloudMoldPromotionApi {
     createdAtTo?: string;
     name?: string;
     status?: string;
+  }
+
+  export interface CampaignUpdateInput {
+    campaignId: string;
+    campaignKind: string;
+    endsAt: string;
+    expectedVersion: number;
+    name: string;
+    startsAt: string;
   }
 }
 
@@ -138,6 +148,22 @@ export function sendPromotionCampaignCommand(
   return requestClient.post<CloudMoldPromotionApi.CampaignCommandResult>(
     '/cloudmold/promotion/command',
     params,
+  );
+}
+
+/** 编辑活动：仅 DRAFT/PAUSED 可改 name/campaignKind/起止时间（campaignCode 业务键不可改，status 不变） */
+export function updateCampaign(
+  input: CloudMoldPromotionApi.CampaignUpdateInput,
+) {
+  return sendPromotionCampaignCommand(
+    buildPromotionCommand(PromotionCampaignOperation.UPDATE_CAMPAIGN, {
+      campaignId: input.campaignId,
+      campaignKind: input.campaignKind,
+      endsAt: input.endsAt,
+      expectedVersion: input.expectedVersion,
+      name: input.name,
+      startsAt: input.startsAt,
+    }),
   );
 }
 

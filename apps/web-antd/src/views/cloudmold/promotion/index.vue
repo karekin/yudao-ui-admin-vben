@@ -24,6 +24,7 @@ import {
   usePromotionCampaignColumns,
   usePromotionCampaignFormSchema,
 } from './data';
+import EditForm from './modules/edit-form.vue';
 import Form from './modules/form.vue';
 
 defineOptions({ name: 'CloudMoldPromotionCampaign' });
@@ -36,6 +37,11 @@ function getMeta(metadata: StatusMeta, status: string) {
 
 const [FormModal, formModalApi] = useVbenModal({
   connectedComponent: Form,
+  destroyOnClose: true,
+});
+
+const [EditModal, editModalApi] = useVbenModal({
+  connectedComponent: EditForm,
   destroyOnClose: true,
 });
 
@@ -61,6 +67,19 @@ const [Grid, gridApi] = useVbenVxeGrid({
 
 function handleCreate() {
   formModalApi.setData(null).open();
+}
+
+function handleEdit(row: CloudMoldPromotionApi.Campaign) {
+  editModalApi
+    .setData({
+      campaignId: row.campaignId,
+      campaignKind: row.campaignKind,
+      endsAt: row.endsAt,
+      expectedVersion: row.aggregateVersion,
+      name: row.name,
+      startsAt: row.startsAt,
+    })
+    .open();
 }
 
 function handleRefresh() {
@@ -123,6 +142,7 @@ function handlePause(row: CloudMoldPromotionApi.Campaign) {
     />
 
     <FormModal @success="handleRefresh" />
+    <EditModal @success="handleRefresh" />
     <Grid table-title="规范营销活动">
       <template #toolbar-tools>
         <TableAction
@@ -146,6 +166,16 @@ function handlePause(row: CloudMoldPromotionApi.Campaign) {
       <template #action="{ row }">
         <TableAction
           :actions="[
+            {
+              ifShow: () =>
+                [
+                  PromotionCampaignStatus.DRAFT,
+                  PromotionCampaignStatus.PAUSED,
+                ].includes(row.status),
+              label: '编辑',
+              onClick: handleEdit.bind(null, row),
+              type: 'link',
+            },
             {
               ifShow: () =>
                 [
