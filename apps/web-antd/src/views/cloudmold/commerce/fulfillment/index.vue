@@ -2,7 +2,11 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CloudMoldCommerceApi } from '#/api/cloudmold/commerce';
 
+import { ref } from 'vue';
+
 import { Page } from '@vben/common-ui';
+
+import { Button } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getCloudMoldFulfillmentPage } from '#/api/cloudmold/commerce';
@@ -12,8 +16,17 @@ import EvidenceAlert from '../../shared/evidence-alert.vue';
 import StatusTag from '../../shared/status-tag.vue';
 import { commerceStatusColor } from '../status';
 import { useFulfillmentColumns, useFulfillmentFormSchema } from './data';
+import DetailDrawer from './detail-drawer.vue';
 
 defineOptions({ name: 'CloudMoldCommerceFulfillment' });
+
+const detailOpen = ref(false);
+const detailFulfillmentId = ref<null | string>(null);
+
+function openDetail(fulfillmentId: string) {
+  detailFulfillmentId.value = fulfillmentId;
+  detailOpen.value = true;
+}
 
 const [Grid] = useVbenVxeGrid({
   formOptions: { schema: useFulfillmentFormSchema() },
@@ -59,6 +72,16 @@ const [Grid] = useVbenVxeGrid({
           :label="row.status"
         />
       </template>
+      <template #action="{ row }">
+        <Button type="link" size="small" @click="openDetail(row.fulfillmentId)">
+          详情
+        </Button>
+      </template>
     </Grid>
+
+    <DetailDrawer
+      v-model:open="detailOpen"
+      :fulfillment-id="detailFulfillmentId"
+    />
   </Page>
 </template>

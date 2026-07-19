@@ -65,5 +65,12 @@ export function usePaymentColumns(): VxeTableGridOptions['columns'] {
     { field: 'aggregateVersion', minWidth: 80, title: '版本' },
     timeColumn('createdAt', '创建时间'),
     timeColumn('updatedAt', '更新时间'),
+    {
+      field: 'action',
+      fixed: 'right',
+      minWidth: 80,
+      slots: { default: 'action' },
+      title: '操作',
+    },
   ];
 }

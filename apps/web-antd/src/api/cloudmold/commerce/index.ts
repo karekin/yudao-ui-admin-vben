@@ -43,12 +43,12 @@ export namespace CloudMoldCommerceApi {
     paymentId?: string;
     paymentStatus?: string;
     productAmountMinor: number;
-    shippingAmountMinor: number;
+    refundId?: string;
     shipmentId?: string;
+    shippingAmountMinor: number;
     status: string;
     totalQuantity: string;
     updatedAt: string;
-    refundId?: string;
   }
 
   export interface OrderDetailItem {
@@ -104,8 +104,10 @@ export namespace CloudMoldCommerceApi {
   export interface Payment {
     aggregateVersion: number;
     capturedAmountMinor: number;
+    capturedAt?: string;
     createdAt: string;
     currencyCode: string;
+    executionMode?: string;
     orderId: string;
     payableAmountMinor: number;
     paymentId: string;
@@ -113,6 +115,7 @@ export namespace CloudMoldCommerceApi {
     providerCode: string;
     providerTransactionReferenceMasked: string;
     refundedAmountMinor: number;
+    refundedAt?: string;
     remainingAmountMinor: number;
     status: string;
     testMode: boolean;
@@ -120,9 +123,11 @@ export namespace CloudMoldCommerceApi {
   }
 
   export interface Fulfillment {
-    carrierCode?: string;
-    cancellationRef?: string;
     aggregateVersion: number;
+    cancellationRef?: string;
+    carrierCode?: string;
+    firstSliceShipmentId?: string;
+    firstSliceShipmentStatus?: string;
     fulfillmentId: string;
     fulfillmentNo: string;
     itemCount: number;
@@ -130,8 +135,39 @@ export namespace CloudMoldCommerceApi {
     orderNo: string;
     promisedDeliveryAt?: string;
     sellerId: string;
+    status: string;
+    totalQuantity: string;
+    updatedAt: string;
+    warehouseId: string;
+    waybillNo?: string;
+  }
+
+  export interface FulfillmentDetailItem {
+    canonicalSkuId: string;
+    createdAt: string;
+    fulfillmentItemId: string;
+    orderItemId: string;
+    quantity: string;
+    reservationId: string;
+    updatedAt: string;
+  }
+
+  export interface FulfillmentDetail {
+    aggregateVersion: number;
+    cancellationRef?: string;
+    carrierCode?: string;
+    createdAt: string;
+    deliveryPromiseVersionRef?: string;
     firstSliceShipmentId?: string;
     firstSliceShipmentStatus?: string;
+    fulfillmentId: string;
+    fulfillmentNo: string;
+    itemCount: number;
+    items: FulfillmentDetailItem[];
+    orderId: string;
+    orderNo: string;
+    promisedDeliveryAt?: string;
+    sellerId: string;
     status: string;
     totalQuantity: string;
     updatedAt: string;
@@ -143,8 +179,8 @@ export namespace CloudMoldCommerceApi {
     aggregateVersion: number;
     afterSaleId: string;
     afterSaleNo: string;
-    approvedAmountMinor?: number;
     afterSaleType: string;
+    approvedAmountMinor?: number;
     canonicalSkuId: string;
     caseStatus: string;
     createdAt: string;
@@ -154,9 +190,9 @@ export namespace CloudMoldCommerceApi {
     quantity: string;
     reasonCode: string;
     refundStatus: string;
-    resolutionSagaId?: string;
     resolutionSagaActiveStep?: string;
     resolutionSagaAttemptCount?: number;
+    resolutionSagaId?: string;
     resolutionSagaLastErrorCode?: string;
     resolutionSagaStatus?: string;
     responsibility?: string;
@@ -196,9 +232,9 @@ export namespace CloudMoldCommerceApi {
 
   export interface AfterSalePageParams extends PageParam {
     afterSaleNo?: string;
+    caseStatus?: string;
     orderNo?: string;
     refundStatus?: string;
-    caseStatus?: string;
   }
 }
 
@@ -237,12 +273,28 @@ export function getCloudMoldPaymentPage(
   );
 }
 
+/** 查询单个规范支付详情，不读取 yudao Mall Pay 表。 */
+export function getCloudMoldPaymentDetail(paymentId: string) {
+  return requestClient.get<CloudMoldCommerceApi.Payment | null>(
+    '/cloudmold/payment/get',
+    { params: { paymentId } },
+  );
+}
+
 export function getCloudMoldFulfillmentPage(
   params: CloudMoldCommerceApi.FulfillmentPageParams,
 ) {
   return requestClient.get<PageResult<CloudMoldCommerceApi.Fulfillment>>(
     '/cloudmold/fulfillment/page',
     { params },
+  );
+}
+
+/** 查询单个规范履约详情（含订单行），不读取 yudao Trade 表。 */
+export function getCloudMoldFulfillmentDetail(fulfillmentId: string) {
+  return requestClient.get<CloudMoldCommerceApi.FulfillmentDetail | null>(
+    '/cloudmold/fulfillment/get',
+    { params: { fulfillmentId } },
   );
 }
 

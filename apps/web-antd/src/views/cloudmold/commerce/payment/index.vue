@@ -2,9 +2,11 @@
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CloudMoldCommerceApi } from '#/api/cloudmold/commerce';
 
+import { ref } from 'vue';
+
 import { Page } from '@vben/common-ui';
 
-import { Tag } from 'ant-design-vue';
+import { Button, Tag } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getCloudMoldPaymentPage } from '#/api/cloudmold/commerce';
@@ -14,8 +16,17 @@ import EvidenceAlert from '../../shared/evidence-alert.vue';
 import StatusTag from '../../shared/status-tag.vue';
 import { commerceStatusColor } from '../status';
 import { usePaymentColumns, usePaymentFormSchema } from './data';
+import DetailDrawer from './detail-drawer.vue';
 
 defineOptions({ name: 'CloudMoldCommercePayment' });
+
+const detailOpen = ref(false);
+const detailPaymentId = ref<null | string>(null);
+
+function openDetail(paymentId: string) {
+  detailPaymentId.value = paymentId;
+  detailOpen.value = true;
+}
 
 const [Grid] = useVbenVxeGrid({
   formOptions: { schema: usePaymentFormSchema() },
@@ -67,6 +78,13 @@ const [Grid] = useVbenVxeGrid({
           {{ row.testMode ? 'INTERNAL_TEST' : '真实通道' }}
         </Tag>
       </template>
+      <template #action="{ row }">
+        <Button type="link" size="small" @click="openDetail(row.paymentId)">
+          详情
+        </Button>
+      </template>
     </Grid>
+
+    <DetailDrawer v-model:open="detailOpen" :payment-id="detailPaymentId" />
   </Page>
 </template>

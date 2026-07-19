@@ -40,5 +40,12 @@ export function useFulfillmentColumns(): VxeTableGridOptions['columns'] {
     { field: 'cancellationRef', minWidth: 180, title: '取消引用' },
     { field: 'aggregateVersion', minWidth: 80, title: '版本' },
     timeColumn('updatedAt', '更新时间'),
+    {
+      field: 'action',
+      fixed: 'right',
+      minWidth: 80,
+      slots: { default: 'action' },
+      title: '操作',
+    },
   ];
 }
