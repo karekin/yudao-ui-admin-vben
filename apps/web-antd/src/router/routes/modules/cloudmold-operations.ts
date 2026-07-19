@@ -90,6 +90,24 @@ const routes: RouteRecordRaw[] = [
           authority: ['cloudmold:commerce-behavior:query'],
         },
       },
+      {
+        path: 'metadata-definition',
+        name: 'CloudMoldMetadataDefinition',
+        component: () => import('#/views/cloudmold/metadata/index.vue'),
+        meta: {
+          title: '元数据定义',
+          authority: ['cloudmold:metadata:query'],
+        },
+      },
+      {
+        path: 'event-outbox',
+        name: 'CloudMoldEventOutbox',
+        component: () => import('#/views/cloudmold/data-contract/index.vue'),
+        meta: {
+          title: '事件外发',
+          authority: ['cloudmold:data-readiness:query'],
+        },
+      },
     ],
   },
 ];
