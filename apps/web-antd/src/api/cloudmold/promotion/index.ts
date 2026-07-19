@@ -2,6 +2,8 @@ import type { PageParam, PageResult } from '@vben/request';
 
 import { requestClient } from '#/api/request';
 
+import { buildCommandEnvelope } from '../command-helpers';
+
 /** 营销活动命令 operation（对齐后端 PromotionOperation 枚举） */
 export const PromotionCampaignOperation = {
   ACTIVATE_CAMPAIGN: 'ACTIVATE_CAMPAIGN',
@@ -144,11 +146,12 @@ function buildPromotionCommand(
   operation: (typeof PromotionCampaignOperation)[keyof typeof PromotionCampaignOperation],
   campaign: CloudMoldPromotionApi.CampaignDefinition,
 ): CloudMoldPromotionApi.CampaignCommandRequest {
+  const { correlationId, idempotencyKey, occurredAt } = buildCommandEnvelope();
   return {
     campaign,
-    correlationId: crypto.randomUUID(),
-    idempotencyKey: crypto.randomUUID(),
-    occurredAt: new Date().toISOString(),
+    correlationId,
+    idempotencyKey,
+    occurredAt,
     operation,
   };
 }
