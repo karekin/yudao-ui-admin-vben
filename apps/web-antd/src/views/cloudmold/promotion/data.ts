@@ -14,6 +14,15 @@ export const promotionStatusMeta: Record<
   PAUSED: { color: 'warning', label: '已暂停' },
 };
 
+/** 营销活动状态机枚举（对齐后端 campaign status，值用于行内按钮 ifShow 比较） */
+export const PromotionCampaignStatus = {
+  ACTIVE: 'ACTIVE',
+  CANCELLED: 'CANCELLED',
+  COMPLETED: 'COMPLETED',
+  DRAFT: 'DRAFT',
+  PAUSED: 'PAUSED',
+};
+
 export function usePromotionCampaignFormSchema(): VbenFormSchema[] {
   return [
     codeInput('campaignId', '活动 ID'),
@@ -47,5 +56,12 @@ export function usePromotionCampaignColumns(): VxeTableGridOptions['columns'] {
     { field: 'aggregateVersion', minWidth: 80, title: '版本' },
     timeColumn('createdAt', '创建时间'),
     timeColumn('updatedAt', '更新时间'),
+    {
+      field: 'action',
+      fixed: 'right',
+      minWidth: 160,
+      slots: { default: 'action' },
+      title: '操作',
+    },
   ];
 }
