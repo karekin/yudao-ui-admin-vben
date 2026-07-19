@@ -5,18 +5,12 @@ import { onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
-import {
-  Alert,
-  Button,
-  Card,
-  Col,
-  Descriptions,
-  Row,
-  Space,
-  Tag,
-} from 'ant-design-vue';
+import { Button, Card, Col, Descriptions, Row, Space } from 'ant-design-vue';
 
 import { getCloudMoldDataReadinessOverview } from '#/api/cloudmold/data-readiness';
+
+import EvidenceAlert from '../shared/evidence-alert.vue';
+import StatusTag from '../shared/status-tag.vue';
 
 defineOptions({ name: 'CloudMoldDataReadiness' });
 
@@ -51,9 +45,7 @@ onMounted(loadOverview);
 
 <template>
   <Page auto-content-height>
-    <Alert
-      class="mb-4"
-      show-icon
+    <EvidenceAlert
       type="warning"
       message="证据状态按来源独立判定"
       description="Outbox 为当前租户实时聚合；CDC、DQC、ADS 和来源准入在外部观察器接入前明确显示 UNKNOWN / NOT_CONNECTED。零失败或零积压本身不代表链路健康。"
@@ -114,12 +106,11 @@ onMounted(loadOverview);
       >
         <Card :title="section.title">
           <Space class="mb-3">
-            <Tag :color="statusColor(overview?.[section.key].status)">
-              {{ overview?.[section.key].status ?? 'UNKNOWN' }}
-            </Tag>
-            <Tag>
-              {{ overview?.[section.key].connectionStatus ?? 'UNKNOWN' }}
-            </Tag>
+            <StatusTag
+              :color="statusColor(overview?.[section.key].status)"
+              :label="overview?.[section.key].status"
+            />
+            <StatusTag :label="overview?.[section.key].connectionStatus" />
           </Space>
           <div>{{ overview?.[section.key].boundary ?? '尚无可验证证据' }}</div>
         </Card>

@@ -51,9 +51,10 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
   return [
     {
       field: 'skuCode',
-      title: '规范 SKU',
       fixed: 'left',
       minWidth: 190,
+      slots: { default: 'sku-code' },
+      title: '规范 SKU',
     },
     {
       field: 'productName',

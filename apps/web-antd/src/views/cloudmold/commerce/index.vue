@@ -1,243 +1,83 @@
 <script lang="ts" setup>
-import type { VxeTableGridOptions } from '#/adapter/vxe-table';
-import type { CloudMoldCommerceApi } from '#/api/cloudmold/commerce';
+import { useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
-import { Alert, Tabs, Tag } from 'ant-design-vue';
+import { Card, Col, Row } from 'ant-design-vue';
 
-import { useVbenVxeGrid } from '#/adapter/vxe-table';
-import {
-  getCloudMoldAfterSalePage,
-  getCloudMoldFulfillmentPage,
-  getCloudMoldListingPage,
-  getCloudMoldOrderPage,
-  getCloudMoldPaymentPage,
-} from '#/api/cloudmold/commerce';
-
-import {
-  useAfterSaleColumns,
-  useAfterSaleFormSchema,
-  useFulfillmentColumns,
-  useFulfillmentFormSchema,
-  useListingColumns,
-  useListingFormSchema,
-  useOrderColumns,
-  useOrderFormSchema,
-  usePaymentColumns,
-  usePaymentFormSchema,
-} from './data';
+import EvidenceAlert from '../shared/evidence-alert.vue';
 
 defineOptions({ name: 'CloudMoldCommerce' });
 
-const successStates = new Set([
-  'CAPTURED',
-  'COMPLETED',
-  'DELIVERED',
-  'PUBLISHED',
-  'REFUNDED',
-  'RESOLVED',
-]);
-const warningStates = new Set([
-  'CANCELLED',
-  'REJECTED',
-  'RETURNED',
-  'SUSPENDED',
-  'UNPUBLISHED',
-]);
+const router = useRouter();
 
-function statusColor(status: unknown) {
-  const value = String(status ?? 'UNKNOWN');
-  if (successStates.has(value)) return 'success';
-  if (warningStates.has(value)) return 'warning';
-  if (value.includes('FAIL') || value.includes('ERROR')) return 'error';
-  return 'processing';
+/**
+ * 交易与履约领域工作台：原 5 实体页签已拆分为独立只读子页。
+ * 此处只做领域导航入口，不再把 5 个实体的完整表格堆进页签，
+ * 避免与子页数据重复；后端菜单完成迁移后本聚合页可下线。
+ */
+const sections = [
+  {
+    desc: '规范 Listing、报价与渠道发布资格',
+    key: 'listing',
+    path: '/cloudmold/listing',
+    title: '渠道刊登',
+  },
+  {
+    desc: '规范 Order 及与支付、履约、售后的跨域关联',
+    key: 'order',
+    path: '/cloudmold/order',
+    title: '订单',
+  },
+  {
+    desc: '规范 Payment（当前为 INTERNAL_TEST 首切片）',
+    key: 'payment',
+    path: '/cloudmold/payment',
+    title: '支付',
+  },
+  {
+    desc: '规范 Fulfillment 与首切片发运事实',
+    key: 'fulfillment',
+    path: '/cloudmold/fulfillment',
+    title: '履约',
+  },
+  {
+    desc: '规范 AfterSale、退货与退款',
+    key: 'aftersale',
+    path: '/cloudmold/aftersale',
+    title: '售后',
+  },
+] as const;
+
+function go(path: string) {
+  router.push(path);
 }
-
-function fieldValue(row: object, field: string) {
-  return (row as Record<string, unknown>)[field];
-}
-
-const [ListingGrid] = useVbenVxeGrid({
-  formOptions: { schema: useListingFormSchema() },
-  gridOptions: {
-    columns: useListingColumns(),
-    height: 'auto',
-    proxyConfig: {
-      ajax: {
-        query: async ({ page }, formValues) =>
-          await getCloudMoldListingPage({
-            pageNo: page.currentPage,
-            pageSize: page.pageSize,
-            ...formValues,
-          }),
-      },
-    },
-    rowConfig: { isHover: true, keyField: 'listingId' },
-    toolbarConfig: { refresh: true, search: true },
-  } as VxeTableGridOptions<CloudMoldCommerceApi.Listing>,
-});
-
-const [OrderGrid] = useVbenVxeGrid({
-  formOptions: { schema: useOrderFormSchema() },
-  gridOptions: {
-    columns: useOrderColumns(),
-    height: 'auto',
-    proxyConfig: {
-      ajax: {
-        query: async ({ page }, formValues) =>
-          await getCloudMoldOrderPage({
-            pageNo: page.currentPage,
-            pageSize: page.pageSize,
-            ...formValues,
-          }),
-      },
-    },
-    rowConfig: { isHover: true, keyField: 'orderId' },
-    toolbarConfig: { refresh: true, search: true },
-  } as VxeTableGridOptions<CloudMoldCommerceApi.Order>,
-});
-
-const [PaymentGrid] = useVbenVxeGrid({
-  formOptions: { schema: usePaymentFormSchema() },
-  gridOptions: {
-    columns: usePaymentColumns(),
-    height: 'auto',
-    proxyConfig: {
-      ajax: {
-        query: async ({ page }, formValues) =>
-          await getCloudMoldPaymentPage({
-            pageNo: page.currentPage,
-            pageSize: page.pageSize,
-            ...formValues,
-          }),
-      },
-    },
-    rowConfig: { isHover: true, keyField: 'paymentId' },
-    toolbarConfig: { refresh: true, search: true },
-  } as VxeTableGridOptions<CloudMoldCommerceApi.Payment>,
-});
-
-const [FulfillmentGrid] = useVbenVxeGrid({
-  formOptions: { schema: useFulfillmentFormSchema() },
-  gridOptions: {
-    columns: useFulfillmentColumns(),
-    height: 'auto',
-    proxyConfig: {
-      ajax: {
-        query: async ({ page }, formValues) =>
-          await getCloudMoldFulfillmentPage({
-            pageNo: page.currentPage,
-            pageSize: page.pageSize,
-            ...formValues,
-          }),
-      },
-    },
-    rowConfig: { isHover: true, keyField: 'fulfillmentId' },
-    toolbarConfig: { refresh: true, search: true },
-  } as VxeTableGridOptions<CloudMoldCommerceApi.Fulfillment>,
-});
-
-const [AfterSaleGrid] = useVbenVxeGrid({
-  formOptions: { schema: useAfterSaleFormSchema() },
-  gridOptions: {
-    columns: useAfterSaleColumns(),
-    height: 'auto',
-    proxyConfig: {
-      ajax: {
-        query: async ({ page }, formValues) =>
-          await getCloudMoldAfterSalePage({
-            pageNo: page.currentPage,
-            pageSize: page.pageSize,
-            ...formValues,
-          }),
-      },
-    },
-    rowConfig: { isHover: true, keyField: 'afterSaleId' },
-    toolbarConfig: { refresh: true, search: true },
-  } as VxeTableGridOptions<CloudMoldCommerceApi.AfterSale>,
-});
 </script>
 
 <template>
   <Page auto-content-height>
-    <Alert
-      class="mb-4"
-      show-icon
-      type="info"
-      message="CloudMold 规范交易与履约权威"
-      description="本页只读取 CloudMold Listing / Order / Payment / Fulfillment / AfterSale 规范表；不读取 yudao Mall Trade、Pay、ERP 或 WMS 业务表。"
+    <EvidenceAlert
+      message="CloudMold 交易与履约工作台"
+      description="本工作台为交易与履约领域入口；Listing / Order / Payment / Fulfillment / AfterSale 已拆分为独立只读页面。请从下方卡片或左侧菜单进入，所有数据只读取 CloudMold 规范表，不读取 yudao Mall Trade、Pay、ERP 或 WMS 业务表。"
     />
 
-    <Tabs class="w-full">
-      <Tabs.TabPane key="listing" tab="渠道刊登">
-        <ListingGrid table-title="规范 Listing">
-          <template #status="{ row, column }">
-            <Tag :color="statusColor(fieldValue(row, column.field))">
-              {{ fieldValue(row, column.field) }}
-            </Tag>
-          </template>
-        </ListingGrid>
-      </Tabs.TabPane>
-
-      <Tabs.TabPane key="order" tab="订单">
-        <OrderGrid table-title="规范 Order">
-          <template #status="{ row, column }">
-            <Tag :color="statusColor(fieldValue(row, column.field))">
-              {{ fieldValue(row, column.field) }}
-            </Tag>
-          </template>
-        </OrderGrid>
-      </Tabs.TabPane>
-
-      <Tabs.TabPane key="payment" tab="支付">
-        <Alert
-          class="mb-3"
-          show-icon
-          type="warning"
-          message="当前支付首切片为 INTERNAL_TEST"
-          description="测试通道事实不能视为真实支付渠道已投产；接入真实 Provider 后仍需独立验收。"
-        />
-        <PaymentGrid table-title="规范 Payment">
-          <template #status="{ row, column }">
-            <Tag :color="statusColor(fieldValue(row, column.field))">
-              {{ fieldValue(row, column.field) }}
-            </Tag>
-          </template>
-          <template #test-mode="{ row }">
-            <Tag :color="row.testMode ? 'warning' : 'success'">
-              {{ row.testMode ? 'INTERNAL_TEST' : '真实通道' }}
-            </Tag>
-          </template>
-        </PaymentGrid>
-      </Tabs.TabPane>
-
-      <Tabs.TabPane key="fulfillment" tab="履约">
-        <Alert
-          class="mb-3"
-          show-icon
-          type="info"
-          message="当前为单发运首切片"
-          description="页面展示正向履约和首个发运事实；多包裹与异常物流仍是后续验收门禁。"
-        />
-        <FulfillmentGrid table-title="规范 Fulfillment">
-          <template #status="{ row, column }">
-            <Tag :color="statusColor(fieldValue(row, column.field))">
-              {{ fieldValue(row, column.field) }}
-            </Tag>
-          </template>
-        </FulfillmentGrid>
-      </Tabs.TabPane>
-
-      <Tabs.TabPane key="aftersale" tab="售后">
-        <AfterSaleGrid table-title="规范 AfterSale">
-          <template #status="{ row, column }">
-            <Tag :color="statusColor(fieldValue(row, column.field))">
-              {{ fieldValue(row, column.field) }}
-            </Tag>
-          </template>
-        </AfterSaleGrid>
-      </Tabs.TabPane>
-    </Tabs>
+    <Row :gutter="16">
+      <Col
+        v-for="section in sections"
+        :key="section.key"
+        :md="8"
+        :sm="12"
+        :xs="24"
+        class="mb-4"
+      >
+        <Card
+          class="cursor-pointer transition-shadow hover:shadow-md"
+          :title="section.title"
+          @click="go(section.path)"
+        >
+          <div class="text-muted-foreground">{{ section.desc }}</div>
+        </Card>
+      </Col>
+    </Row>
   </Page>
 </template>

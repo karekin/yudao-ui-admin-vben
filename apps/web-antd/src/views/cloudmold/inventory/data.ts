@@ -1,6 +1,8 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
+import { codeInput } from '../shared/form-helpers';
+
 export const reservationStatusMeta: Record<
   number,
   { color: string; label: string }
@@ -25,13 +27,6 @@ export const qualityStatusMeta: Record<
   QUALIFIED: { color: 'success', label: '合格' },
   REJECTED: { color: 'error', label: '拒收' },
 };
-
-const codeInput = (fieldName: string, label: string): VbenFormSchema => ({
-  component: 'Input',
-  componentProps: { allowClear: true, placeholder: `输入${label}` },
-  fieldName,
-  label,
-});
 
 export function useBalanceFormSchema(): VbenFormSchema[] {
   return [

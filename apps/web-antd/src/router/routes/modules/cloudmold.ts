@@ -49,6 +49,53 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'listing',
+        name: 'CloudMoldCommerceListing',
+        component: () => import('#/views/cloudmold/commerce/listing/index.vue'),
+        meta: {
+          title: '渠道刊登',
+          authority: ['cloudmold:listing:query'],
+        },
+      },
+      {
+        path: 'order',
+        name: 'CloudMoldCommerceOrder',
+        component: () => import('#/views/cloudmold/commerce/order/index.vue'),
+        meta: {
+          title: '订单',
+          authority: ['cloudmold:order:query'],
+        },
+      },
+      {
+        path: 'payment',
+        name: 'CloudMoldCommercePayment',
+        component: () => import('#/views/cloudmold/commerce/payment/index.vue'),
+        meta: {
+          title: '支付',
+          authority: ['cloudmold:payment:query'],
+        },
+      },
+      {
+        path: 'fulfillment',
+        name: 'CloudMoldCommerceFulfillment',
+        component: () =>
+          import('#/views/cloudmold/commerce/fulfillment/index.vue'),
+        meta: {
+          title: '履约',
+          authority: ['cloudmold:fulfillment:query'],
+        },
+      },
+      {
+        path: 'aftersale',
+        name: 'CloudMoldCommerceAfterSale',
+        component: () =>
+          import('#/views/cloudmold/commerce/aftersale/index.vue'),
+        meta: {
+          title: '售后',
+          authority: ['cloudmold:aftersale:query'],
+        },
+      },
+      {
         path: 'data-readiness',
         name: 'CloudMoldDataReadiness',
         component: () => import('#/views/cloudmold/data-readiness/index.vue'),

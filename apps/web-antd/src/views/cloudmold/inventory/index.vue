@@ -4,7 +4,7 @@ import type { CloudMoldInventoryApi } from '#/api/cloudmold/inventory';
 
 import { Page } from '@vben/common-ui';
 
-import { Alert, Tabs, Tag } from 'ant-design-vue';
+import { Tabs } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
@@ -13,6 +13,8 @@ import {
   getCloudMoldInventoryReservationPage,
 } from '#/api/cloudmold/inventory';
 
+import EvidenceAlert from '../shared/evidence-alert.vue';
+import StatusTag from '../shared/status-tag.vue';
 import {
   qualityStatusMeta,
   reservationStatusMeta,
@@ -27,6 +29,8 @@ import {
 
 defineOptions({ name: 'CloudMoldInventory' });
 
+type StatusMeta = Record<number | string, { color: string; label: string }>;
+
 function getFieldValue(row: object, field: string) {
   return (row as Record<string, unknown>)[field];
 }
@@ -38,10 +42,7 @@ function formatDecimal(value: unknown) {
   return String(value).replace(/(\.\d*?[1-9])0+$|\.0+$/, '$1');
 }
 
-function getMeta(
-  metadata: Record<number | string, { color: string; label: string }>,
-  status: number | string,
-) {
+function getMeta(metadata: StatusMeta, status: number | string) {
   return metadata[status] ?? { color: 'default', label: String(status) };
 }
 
@@ -109,10 +110,7 @@ const [LedgerGrid] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <Alert
-      class="mb-4"
-      show-icon
-      type="info"
+    <EvidenceAlert
       message="CloudMold 规范库存权威"
       description="本页只读取 CloudMold Inventory v3 的精确货主 / SKU / 仓库 / 库位 / Lot / 状态 / UOM 粒度，不读 product_sku.stock、erp_stock 或 wms_inventory 权威字段。"
     />
@@ -121,14 +119,10 @@ const [LedgerGrid] = useVbenVxeGrid({
       <Tabs.TabPane key="balances" tab="库存余额">
         <BalanceGrid table-title="规范库存余额">
           <template #stock-status="{ row }">
-            <Tag :color="getMeta(stockStatusMeta, row.stockStatus).color">
-              {{ getMeta(stockStatusMeta, row.stockStatus).label }}
-            </Tag>
+            <StatusTag v-bind="getMeta(stockStatusMeta, row.stockStatus)" />
           </template>
           <template #quality-status="{ row }">
-            <Tag :color="getMeta(qualityStatusMeta, row.qualityStatus).color">
-              {{ getMeta(qualityStatusMeta, row.qualityStatus).label }}
-            </Tag>
+            <StatusTag v-bind="getMeta(qualityStatusMeta, row.qualityStatus)" />
           </template>
           <template #quantity="{ row, column }">
             {{ formatDecimal(getFieldValue(row, column.field)) }}
@@ -139,18 +133,12 @@ const [LedgerGrid] = useVbenVxeGrid({
       <Tabs.TabPane key="reservations" tab="预占与分配">
         <ReservationGrid table-title="规范库存预占">
           <template #reservation-status="{ row }">
-            <Tag :color="getMeta(reservationStatusMeta, row.status).color">
-              {{ getMeta(reservationStatusMeta, row.status).label }}
-            </Tag>
+            <StatusTag v-bind="getMeta(reservationStatusMeta, row.status)" />
           </template>
           <template #allocation-status="{ row }">
-            <Tag
-              :color="
-                getMeta(reservationStatusMeta, row.allocationStatus).color
-              "
-            >
-              {{ getMeta(reservationStatusMeta, row.allocationStatus).label }}
-            </Tag>
+            <StatusTag
+              v-bind="getMeta(reservationStatusMeta, row.allocationStatus)"
+            />
           </template>
           <template #quantity="{ row, column }">
             {{ formatDecimal(getFieldValue(row, column.field)) }}
