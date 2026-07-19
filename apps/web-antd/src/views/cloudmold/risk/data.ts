@@ -13,6 +13,37 @@ export const reviewStatusMeta: Record<
   OPEN: { color: 'warning', label: '待处理' },
 };
 
+/** 审核决策表单（DECIDE_REVIEW：decisionType 非惩罚性四选一 + reasonCode） */
+export function useRiskReviewDecideFormSchema(): VbenFormSchema[] {
+  return [
+    {
+      component: 'Select',
+      componentProps: {
+        options: [
+          { label: '确认风险', value: 'CONFIRM_RISK' },
+          { label: '驳回', value: 'DISMISS' },
+          { label: '升级', value: 'ESCALATE' },
+          { label: '持续监控', value: 'MONITOR' },
+        ],
+        placeholder: '请选择决策类型',
+      },
+      fieldName: 'decisionType',
+      label: '决策类型',
+      rules: 'required',
+    },
+    {
+      component: 'Input',
+      componentProps: {
+        maxLength: 64,
+        placeholder: '请输入原因编码（大写字母+连字符）',
+      },
+      fieldName: 'reasonCode',
+      label: '原因编码',
+      rules: 'required',
+    },
+  ];
+}
+
 export function useRiskReviewFormSchema(): VbenFormSchema[] {
   return [
     codeInput('caseId', '案例 ID'),
@@ -42,5 +73,12 @@ export function useRiskReviewColumns(): VxeTableGridOptions['columns'] {
     { field: 'aggregateVersion', minWidth: 80, title: '版本' },
     timeColumn('createdAt', '创建时间'),
     timeColumn('updatedAt', '更新时间'),
+    {
+      field: 'action',
+      fixed: 'right',
+      minWidth: 160,
+      slots: { default: 'action' },
+      title: '操作',
+    },
   ];
 }

@@ -3,10 +3,20 @@ import type { PageParam, PageResult } from '@vben/request';
 import { requestClient } from '#/api/request';
 
 /**
- * CloudMold 规范身份只读查询 API。
+ * CloudMold 规范身份只读查询 + source resolve API。
  * 仅读取 cloudmold_identity_principal / source_identity / operation 权威表。
  */
 export namespace CloudMoldIdentityApi {
+  export interface Operation {
+    commandType: string;
+    createdAt: string;
+    idempotencyKey: string;
+    operationId: number;
+    principalId?: string;
+    status: number;
+    updatedAt: string;
+  }
+
   export interface Principal {
     createdAt: string;
     principalId: string;
@@ -15,6 +25,23 @@ export namespace CloudMoldIdentityApi {
     tenantId: number;
     updatedAt: string;
     version: number;
+  }
+
+  export interface PrincipalPageParams extends PageParam {
+    principalType?: string;
+    status?: string;
+  }
+
+  export interface OperationPageParams extends PageParam {
+    commandType?: string;
+    principalId?: string;
+    status?: number;
+  }
+
+  export interface ResolveSourceInput {
+    sourceId: string;
+    sourceSystem: string;
+    sourceType: string;
   }
 
   export interface Source {
@@ -31,33 +58,21 @@ export namespace CloudMoldIdentityApi {
     version: number;
   }
 
-  export interface Operation {
-    commandType: string;
-    createdAt: string;
-    idempotencyKey: string;
-    operationId: number;
-    principalId?: string;
-    status: number;
-    updatedAt: string;
-  }
-
-  export interface PrincipalPageParams extends PageParam {
-    principalType?: string;
-    status?: string;
-  }
-
   export interface SourcePageParams extends PageParam {
     principalId?: string;
     sourceSystem?: string;
     sourceType?: string;
     status?: string;
   }
+}
 
-  export interface OperationPageParams extends PageParam {
-    commandType?: string;
-    principalId?: string;
-    status?: number;
-  }
+export function getCloudMoldIdentityOperationPage(
+  params: CloudMoldIdentityApi.OperationPageParams,
+) {
+  return requestClient.get<PageResult<CloudMoldIdentityApi.Operation>>(
+    '/cloudmold/identity/operations/page',
+    { params },
+  );
 }
 
 export function getCloudMoldIdentityPrincipalPage(
@@ -78,11 +93,12 @@ export function getCloudMoldIdentitySourcePage(
   );
 }
 
-export function getCloudMoldIdentityOperationPage(
-  params: CloudMoldIdentityApi.OperationPageParams,
+/** 解析 source 三元组到 CloudMold principal（管理员用 SYSTEM/SYSTEM_ADMIN_USER/userId） */
+export function resolveCloudMoldSourceIdentity(
+  params: CloudMoldIdentityApi.ResolveSourceInput,
 ) {
-  return requestClient.get<PageResult<CloudMoldIdentityApi.Operation>>(
-    '/cloudmold/identity/operations/page',
-    { params },
+  return requestClient.post<CloudMoldIdentityApi.Source>(
+    '/cloudmold/identity/source/resolve',
+    params,
   );
 }
