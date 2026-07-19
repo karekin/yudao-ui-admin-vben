@@ -48,6 +48,15 @@ const routes: RouteRecordRaw[] = [
           ],
         },
       },
+      {
+        path: 'data-readiness',
+        name: 'CloudMoldDataReadiness',
+        component: () => import('#/views/cloudmold/data-readiness/index.vue'),
+        meta: {
+          title: '数据就绪度',
+          authority: ['cloudmold:data-readiness:query'],
+        },
+      },
     ],
   },
 ];
