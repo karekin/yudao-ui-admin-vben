@@ -34,6 +34,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'merchant',
+        name: 'CloudMoldMerchant',
+        component: () => import('#/views/cloudmold/merchant/index.vue'),
+        meta: {
+          title: '规范商家',
+          authority: ['cloudmold:merchant:query'],
+        },
+      },
+      {
         path: 'commerce',
         name: 'CloudMoldCommerce',
         component: () => import('#/views/cloudmold/commerce/index.vue'),
