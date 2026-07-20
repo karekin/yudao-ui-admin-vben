@@ -107,3 +107,94 @@ export function approveAfterSale(
     reviewerId,
   });
 }
+
+/** Listing 上架状态转换 operation（对齐后端 ListingOperation，CREATE_DRAFT 非转换不入） */
+export const ListingOperation = {
+  APPROVE_BUSINESS: 'APPROVE_BUSINESS',
+  APPROVE_RISK: 'APPROVE_RISK',
+  ARCHIVE: 'ARCHIVE',
+  PASS_COMPLETION: 'PASS_COMPLETION',
+  PUBLISH: 'PUBLISH',
+  REJECT_BUSINESS: 'REJECT_BUSINESS',
+  REJECT_COMPLETION: 'REJECT_COMPLETION',
+  REJECT_RISK: 'REJECT_RISK',
+  REVISE: 'REVISE',
+  SUBMIT: 'SUBMIT',
+  SUSPEND: 'SUSPEND',
+  UNPUBLISH: 'UNPUBLISH',
+} as const;
+
+/** 通用 listing 状态转换（无额外入参的 10 个 op） */
+function listingTransition(
+  operation: string,
+  listingId: string,
+  expectedVersion: number,
+) {
+  return sendCommerceCommand('/cloudmold/listing/command', {
+    expectedVersion,
+    listingId,
+    operation,
+  });
+}
+
+/** 提交审核：DRAFT → SUBMITTED */
+export const submitListing = (id: string, v: number) =>
+  listingTransition(ListingOperation.SUBMIT, id, v);
+/** 通过完备性：SUBMITTED → COMPLETION_PASSED */
+export const passCompletionListing = (id: string, v: number) =>
+  listingTransition(ListingOperation.PASS_COMPLETION, id, v);
+/** 通过业务审核：COMPLETION_PASSED → BUSINESS_APPROVED */
+export const approveBusinessListing = (id: string, v: number) =>
+  listingTransition(ListingOperation.APPROVE_BUSINESS, id, v);
+/** 通过风控审核：BUSINESS_APPROVED → RISK_APPROVED */
+export const approveRiskListing = (id: string, v: number) =>
+  listingTransition(ListingOperation.APPROVE_RISK, id, v);
+/** 驳回完备性：SUBMITTED → REJECTED */
+export const rejectCompletionListing = (id: string, v: number) =>
+  listingTransition(ListingOperation.REJECT_COMPLETION, id, v);
+/** 驳回业务：COMPLETION_PASSED → REJECTED */
+export const rejectBusinessListing = (id: string, v: number) =>
+  listingTransition(ListingOperation.REJECT_BUSINESS, id, v);
+/** 驳回风控：BUSINESS_APPROVED → REJECTED */
+export const rejectRiskListing = (id: string, v: number) =>
+  listingTransition(ListingOperation.REJECT_RISK, id, v);
+/** 修订：REJECTED → DRAFT（revision+1） */
+export const reviseListing = (id: string, v: number) =>
+  listingTransition(ListingOperation.REVISE, id, v);
+/** 下架：PUBLISHED → UNPUBLISHED */
+export const unpublishListing = (id: string, v: number) =>
+  listingTransition(ListingOperation.UNPUBLISH, id, v);
+/** 归档：DRAFT/REJECTED/UNPUBLISHED/SUSPENDED → ARCHIVED */
+export const archiveListing = (id: string, v: number) =>
+  listingTransition(ListingOperation.ARCHIVE, id, v);
+
+/**
+ * 发布：RISK_APPROVED/UNPUBLISHED/SUSPENDED → PUBLISHED。
+ * publisherRef 首次必填；不传时后端复用 header 已存的 publisherRef。
+ */
+export function publishListing(
+  listingId: string,
+  expectedVersion: number,
+  publisherRef?: string,
+) {
+  return sendCommerceCommand('/cloudmold/listing/command', {
+    expectedVersion,
+    listingId,
+    operation: ListingOperation.PUBLISH,
+    ...(publisherRef ? { publisherRef } : {}),
+  });
+}
+
+/** 暂停：PUBLISHED → SUSPENDED（reason 必填，≤256） */
+export function suspendListing(
+  listingId: string,
+  expectedVersion: number,
+  reason: string,
+) {
+  return sendCommerceCommand('/cloudmold/listing/command', {
+    expectedVersion,
+    listingId,
+    operation: ListingOperation.SUSPEND,
+    reason,
+  });
+}

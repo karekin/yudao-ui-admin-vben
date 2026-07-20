@@ -8,6 +8,20 @@ import {
   timeColumn,
 } from '../../shared/form-helpers';
 
+/** Listing 状态机枚举（值用于行内按钮 ifShow 比较） */
+export const ListingStatus = {
+  ARCHIVED: 'ARCHIVED',
+  BUSINESS_APPROVED: 'BUSINESS_APPROVED',
+  COMPLETION_PASSED: 'COMPLETION_PASSED',
+  DRAFT: 'DRAFT',
+  PUBLISHED: 'PUBLISHED',
+  REJECTED: 'REJECTED',
+  RISK_APPROVED: 'RISK_APPROVED',
+  SUBMITTED: 'SUBMITTED',
+  SUSPENDED: 'SUSPENDED',
+  UNPUBLISHED: 'UNPUBLISHED',
+};
+
 export function useListingFormSchema(): VbenFormSchema[] {
   return [
     codeInput('listingNo', '刊登单号'),
@@ -47,7 +61,14 @@ export function useListingColumns(): VxeTableGridOptions['columns'] {
     { field: 'riskApproved', minWidth: 100, title: '风控审批' },
     timeColumn('publishStartAt', '发布开始'),
     timeColumn('publishEndAt', '发布结束'),
-    { field: 'aggregateVersion', minWidth: 80, title: '版本' },
+    { field: 'version', minWidth: 80, title: '版本' },
     timeColumn('updatedAt', '更新时间'),
+    {
+      field: 'action',
+      fixed: 'right',
+      minWidth: 220,
+      slots: { default: 'action' },
+      title: '操作',
+    },
   ];
 }
