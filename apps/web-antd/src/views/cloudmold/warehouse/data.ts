@@ -15,6 +15,13 @@ export const warehouseStatusMeta: Record<
   INACTIVE: { color: 'warning', label: '停用' },
 };
 
+/** 仓库/库区/库位状态枚举（值用于行内按钮 ifShow 比较；DRAFT 为只读起态） */
+export const WarehouseStatus = {
+  ACTIVE: 'ACTIVE',
+  DRAFT: 'DRAFT',
+  INACTIVE: 'INACTIVE',
+};
+
 export function useWarehouseFormSchema(): VbenFormSchema[] {
   return [
     codeInput('warehouseCode', '仓库编码'),
@@ -61,6 +68,13 @@ export function useWarehouseColumns(): VxeTableGridOptions['columns'] {
     { field: 'warehouseId', minWidth: 180, title: '规范仓库 ID' },
     { field: 'version', minWidth: 80, title: '版本' },
     timeColumn('updatedAt', '更新时间'),
+    {
+      field: 'action',
+      fixed: 'right',
+      minWidth: 100,
+      slots: { default: 'warehouse-action' },
+      title: '操作',
+    },
   ];
 }
 
@@ -86,6 +100,13 @@ export function useZoneColumns(): VxeTableGridOptions['columns'] {
     { field: 'zoneId', minWidth: 180, title: '规范库区 ID' },
     { field: 'version', minWidth: 80, title: '版本' },
     timeColumn('updatedAt', '更新时间'),
+    {
+      field: 'action',
+      fixed: 'right',
+      minWidth: 100,
+      slots: { default: 'zone-action' },
+      title: '操作',
+    },
   ];
 }
 
@@ -122,5 +143,12 @@ export function useLocationColumns(): VxeTableGridOptions['columns'] {
     { field: 'locationId', minWidth: 180, title: '规范库位 ID' },
     { field: 'version', minWidth: 80, title: '版本' },
     timeColumn('updatedAt', '更新时间'),
+    {
+      field: 'action',
+      fixed: 'right',
+      minWidth: 100,
+      slots: { default: 'location-action' },
+      title: '操作',
+    },
   ];
 }

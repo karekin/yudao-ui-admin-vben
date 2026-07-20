@@ -23,6 +23,14 @@ export const ticketPriorityMeta: Record<
   URGENT: { color: 'error', label: '紧急' },
 };
 
+/** 工单状态机枚举（值用于行内按钮 ifShow 比较） */
+export const TicketStatus = {
+  CLOSED: 'CLOSED',
+  IN_PROGRESS: 'IN_PROGRESS',
+  OPEN: 'OPEN',
+  RESOLVED: 'RESOLVED',
+};
+
 export function useCustomerServiceTicketFormSchema(): VbenFormSchema[] {
   return [
     codeInput('ticketNo', '工单号'),
@@ -62,5 +70,12 @@ export function useCustomerServiceTicketColumns(): VxeTableGridOptions['columns'
     { field: 'aggregateVersion', minWidth: 80, title: '版本' },
     timeColumn('createdAt', '创建时间'),
     timeColumn('updatedAt', '更新时间'),
+    {
+      field: 'action',
+      fixed: 'right',
+      minWidth: 140,
+      slots: { default: 'action' },
+      title: '操作',
+    },
   ];
 }
