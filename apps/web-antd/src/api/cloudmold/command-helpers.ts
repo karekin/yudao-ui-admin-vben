@@ -34,3 +34,22 @@ export function buildCommandEnvelopeWithRunId(): {
     runId: crypto.randomUUID(),
   };
 }
+
+/**
+ * merchant 领域 envelope：强制 runId + sourceSystem + traceId。
+ * 后端 validateCommon 额外要求 sourceSystem(≤64) + traceId(≤128)。
+ */
+export function buildMerchantCommandEnvelope(): {
+  correlationId: string;
+  idempotencyKey: string;
+  occurredAt: string;
+  runId: string;
+  sourceSystem: string;
+  traceId: string;
+} {
+  return {
+    ...buildCommandEnvelopeWithRunId(),
+    sourceSystem: 'cloudmold-admin',
+    traceId: crypto.randomUUID(),
+  };
+}
