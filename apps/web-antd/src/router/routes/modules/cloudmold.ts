@@ -16,6 +16,15 @@ const routes: RouteRecordRaw[] = [
     },
     children: [
       {
+        path: 'agent-control',
+        name: 'CloudMoldAgentControl',
+        component: () => import('#/views/cloudmold/agent-control/index.vue'),
+        meta: {
+          title: '岗位协同中心',
+          authority: ['cloudmold:agent-control:query'],
+        },
+      },
+      {
         path: 'catalog',
         name: 'CloudMoldCatalog',
         component: () => import('#/views/cloudmold/catalog/index.vue'),
