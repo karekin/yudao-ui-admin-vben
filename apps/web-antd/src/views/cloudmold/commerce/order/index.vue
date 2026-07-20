@@ -1,21 +1,26 @@
 <script lang="ts" setup>
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CloudMoldCommerceApi } from '#/api/cloudmold/commerce';
+import type { CloudMoldCommerceCommandApi } from '#/api/cloudmold/commerce/command';
 
 import { ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
-import { Button } from 'ant-design-vue';
+import { message } from 'ant-design-vue';
 
-import { useVbenVxeGrid } from '#/adapter/vxe-table';
+import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getCloudMoldOrderPage } from '#/api/cloudmold/commerce';
+import {
+  completeOrder,
+  confirmOrderInventory,
+} from '#/api/cloudmold/commerce/command';
 
 import CopyIdCell from '../../shared/copy-id-cell.vue';
 import EvidenceAlert from '../../shared/evidence-alert.vue';
 import StatusTag from '../../shared/status-tag.vue';
 import { commerceStatusColor } from '../status';
-import { useOrderColumns, useOrderFormSchema } from './data';
+import { OrderStatus, useOrderColumns, useOrderFormSchema } from './data';
 import DetailDrawer from './detail-drawer.vue';
 
 defineOptions({ name: 'CloudMoldCommerceOrder' });
@@ -28,7 +33,7 @@ function openDetail(orderId: string) {
   detailOpen.value = true;
 }
 
-const [Grid] = useVbenVxeGrid({
+const [Grid, gridApi] = useVbenVxeGrid({
   formOptions: { schema: useOrderFormSchema() },
   gridOptions: {
     columns: useOrderColumns(),
@@ -47,13 +52,56 @@ const [Grid] = useVbenVxeGrid({
     toolbarConfig: { refresh: true, search: true },
   } as VxeTableGridOptions<CloudMoldCommerceApi.Order>,
 });
+
+function handleRefresh() {
+  gridApi.query();
+}
+
+/** 执行订单状态转换的统一闭环：防双击 loading → 幂等调用 → 成功/失败提示 → 刷新 */
+async function runOrderTransition(
+  action: (
+    orderId: string,
+    expectedVersion: number,
+  ) => Promise<CloudMoldCommerceCommandApi.CommandResult>,
+  row: CloudMoldCommerceApi.Order,
+  actionName: string,
+) {
+  const hideLoading = message.loading({
+    content: `正在${actionName}…`,
+    duration: 0,
+  });
+  try {
+    const result = await action(row.orderId, row.aggregateVersion);
+    if (result.duplicate) {
+      message.warning('该操作已处理（幂等重放）');
+    } else {
+      message.success(`${actionName}成功`);
+    }
+    handleRefresh();
+  } catch (error) {
+    message.error(
+      `${actionName}失败：${error instanceof Error ? error.message : '请稍后重试'}`,
+    );
+    handleRefresh();
+  } finally {
+    hideLoading();
+  }
+}
+
+function handleConfirmInventory(row: CloudMoldCommerceApi.Order) {
+  return runOrderTransition(confirmOrderInventory, row, '库存确认');
+}
+
+function handleComplete(row: CloudMoldCommerceApi.Order) {
+  return runOrderTransition(completeOrder, row, '完成订单');
+}
 </script>
 
 <template>
   <Page auto-content-height>
     <EvidenceAlert
       message="CloudMold 规范 Order 权威"
-      description="本页只读取 CloudMold Order 规范表；订单、资金事实与支付通道状态彼此分离，不读取 yudao Mall Trade 业务表。"
+      description="本页读取 CloudMold Order 规范表，并支持订单状态转换（库存确认/完成，幂等命令 + 乐观版本）；订单、资金事实与支付通道状态彼此分离，不读取 yudao Mall Trade 业务表。"
     />
 
     <Grid table-title="规范 Order">
@@ -67,9 +115,27 @@ const [Grid] = useVbenVxeGrid({
         />
       </template>
       <template #action="{ row }">
-        <Button type="link" size="small" @click="openDetail(row.orderId)">
-          详情
-        </Button>
+        <TableAction
+          :actions="[
+            {
+              label: '详情',
+              onClick: () => openDetail(row.orderId),
+              type: 'link',
+            },
+            {
+              ifShow: () => row.status === OrderStatus.PLACED,
+              label: '库存确认',
+              onClick: handleConfirmInventory.bind(null, row),
+              type: 'link',
+            },
+            {
+              ifShow: () => row.status === OrderStatus.SHIPPED,
+              label: '完成',
+              onClick: handleComplete.bind(null, row),
+              type: 'link',
+            },
+          ]"
+        />
       </template>
     </Grid>
 

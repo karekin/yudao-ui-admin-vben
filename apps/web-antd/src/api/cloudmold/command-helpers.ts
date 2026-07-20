@@ -18,3 +18,19 @@ export function buildCommandEnvelope(): {
     occurredAt: new Date().toISOString(),
   };
 }
+
+/**
+ * commerce 三领域（fulfillment/order/aftersale）envelope：额外强制 runId（≤64）。
+ * 后端 validateCommon 强制 operation/idempotencyKey/runId/occurredAt/correlationId。
+ */
+export function buildCommandEnvelopeWithRunId(): {
+  correlationId: string;
+  idempotencyKey: string;
+  occurredAt: string;
+  runId: string;
+} {
+  return {
+    ...buildCommandEnvelope(),
+    runId: crypto.randomUUID(),
+  };
+}

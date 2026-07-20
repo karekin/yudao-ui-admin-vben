@@ -8,6 +8,13 @@ import {
   timeColumn,
 } from '../../shared/form-helpers';
 
+/** AfterSale 售后 case 状态机枚举（前端状态字段是 caseStatus，非 status） */
+export const AfterSaleCaseStatus = {
+  APPROVED: 'APPROVED',
+  REQUESTED: 'REQUESTED',
+  RESOLUTION_PENDING: 'RESOLUTION_PENDING',
+};
+
 export function useAfterSaleFormSchema(): VbenFormSchema[] {
   return [
     codeInput('afterSaleNo', '售后单号'),

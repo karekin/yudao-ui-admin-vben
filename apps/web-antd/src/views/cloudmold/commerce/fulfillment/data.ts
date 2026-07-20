@@ -3,6 +3,16 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import { codeInput, statusInput, timeColumn } from '../../shared/form-helpers';
 
+/** Fulfillment 履约状态机枚举（值用于行内按钮 ifShow 比较） */
+export const FulfillmentStatus = {
+  CANCELLATION_PENDING: 'CANCELLATION_PENDING',
+  CANCELLED: 'CANCELLED',
+  CREATED: 'CREATED',
+  DELIVERED: 'DELIVERED',
+  IN_TRANSIT: 'IN_TRANSIT',
+  SHIPPED: 'SHIPPED',
+};
+
 export function useFulfillmentFormSchema(): VbenFormSchema[] {
   return [
     codeInput('fulfillmentNo', '履约单号'),

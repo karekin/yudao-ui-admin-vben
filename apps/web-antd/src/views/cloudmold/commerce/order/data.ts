@@ -8,6 +8,17 @@ import {
   timeColumn,
 } from '../../shared/form-helpers';
 
+/** Order 订单状态机枚举（值用于行内按钮 ifShow 比较） */
+export const OrderStatus = {
+  CANCELLATION_PENDING: 'CANCELLATION_PENDING',
+  CANCELLED: 'CANCELLED',
+  COMPLETED: 'COMPLETED',
+  INVENTORY_RESERVED: 'INVENTORY_RESERVED',
+  PAYMENT_CONFIRMED: 'PAYMENT_CONFIRMED',
+  PLACED: 'PLACED',
+  SHIPPED: 'SHIPPED',
+};
+
 export function useOrderFormSchema(): VbenFormSchema[] {
   return [
     codeInput('orderNo', '订单号'),
