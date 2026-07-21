@@ -25,6 +25,27 @@ export namespace CloudMoldAgentControlApi {
     roleCode?: string;
     status?: string;
   }
+
+  /** 岗位角色授予记录（对齐后端 ActorRoleGrantView） */
+  export interface ActorRoleGrantView {
+    actorUserId: number;
+    grantId: string;
+    grantedAt: string;
+    grantedByUserId: number;
+    roleCode: string;
+    status: string;
+    updatedAt: string;
+    validFrom: string;
+    validUntil: string;
+    version: number;
+  }
+
+  export interface RoleGrantParams {
+    actorUserId?: number;
+    limit?: number;
+    roleCode?: string;
+    status?: string;
+  }
 }
 
 export function getCloudMoldAgentBusinessCards(
@@ -32,6 +53,16 @@ export function getCloudMoldAgentBusinessCards(
 ) {
   return requestClient.get<CloudMoldAgentControlApi.BusinessCard[]>(
     '/cloudmold/agent-control/business-cards',
+    { params },
+  );
+}
+
+/** 查询岗位角色授予记录（管理员治理只读，权限 cloudmold:agent-control:govern） */
+export function getCloudMoldAgentRoleGrants(
+  params: CloudMoldAgentControlApi.RoleGrantParams,
+) {
+  return requestClient.get<CloudMoldAgentControlApi.ActorRoleGrantView[]>(
+    '/cloudmold/agent-control/governance/authorities/grants',
     { params },
   );
 }
