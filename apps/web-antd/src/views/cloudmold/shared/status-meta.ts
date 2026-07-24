@@ -9,20 +9,24 @@ const enumLabels: Record<string, string> = {
   ACTIVITY: '活动',
   ADS: '数据应用',
   ADVERTISING: '广告',
+  ALLOCATABLE: '可分配',
   APPROVAL: '审批',
   APPROVED: '已通过',
   ARCHIVED: '已归档',
   BUSINESS: '业务',
   BUSINESS_APPROVED: '业务审核通过',
   BUYER: '买家',
+  CANCEL: '订单取消',
   CANCELLATION_PENDING: '取消处理中',
   CARRIER: '承运商',
   CANCELLED: '已取消',
   CAPTURED: '已收款',
   CDC: '数据同步',
   CLOSED: '已关闭',
+  CNY: '人民币（CNY）',
   COMPLETED: '已完成',
   COMPLETION_PASSED: '资料校验通过',
+  CONNECTED: '已接入',
   CREATED: '待发货',
   DAMAGED: '残次',
   DECIDED: '已决策',
@@ -36,20 +40,24 @@ const enumLabels: Record<string, string> = {
   EXITING: '退出中',
   EXPIRED: '已过期',
   FAILED: '失败',
+  FULFILLMENT: '履约仓',
   GENERAL: '一般',
   HANDOFF: '已交接',
   HEALTHY: '正常',
   INACTIVE: '停用',
   INTERNAL_TEST: '内部测试',
   INVENTORY_RESERVED: '库存已锁定',
+  IllegalArgumentException: '参数校验失败',
   IN_PROGRESS: '处理中',
   IN_REVIEW: '审核中',
   IN_TRANSIT: '运输中',
+  INSPECTION_ACCEPTED: '退货验收通过',
   MEMBER: '会员',
   MERCHANT: '商家',
   MERCHANT_OPERATOR: '商家操作员',
   MIGRATION_OPENING: '迁移开账',
   MONITOR: '持续观察',
+  NONE: '无',
   NON_SELLABLE: '不可售',
   NOT_CONNECTED: '未接入',
   OPEN: '待处理',
@@ -57,6 +65,7 @@ const enumLabels: Record<string, string> = {
   PAUSED: '已暂停',
   PAYMENT_CONFIRMED: '支付已确认',
   PIECE: '件',
+  PCS: '件',
   PENDING: '待处理',
   PENDING_ACTIVATION: '待激活',
   PENDING_QC: '待质检',
@@ -64,6 +73,7 @@ const enumLabels: Record<string, string> = {
   PLATFORM_OPERATOR: '平台操作员',
   PLATFORM: '平台',
   PUBLISHED: '已发布',
+  PURCHASE_RECEIPT: '采购入库',
   QUALIFIED: '合格',
   READY: '就绪',
   RECEIVE: '收货入库',
@@ -82,9 +92,13 @@ const enumLabels: Record<string, string> = {
   RETURNED: '已退货',
   REVOKED: '已撤销',
   RISK_APPROVED: '风控审核通过',
+  SALE_RETURN: '销售退货',
   SELLABLE: '可售',
   SHIP: '销售出库',
+  SHIPMENT: '发货',
   SHIPPED: '已发货',
+  SINGLE: '单边分录',
+  SIZE_NOT_FIT: '尺码不合适',
   SMS: '短信',
   STALE: '数据过期',
   SUBMITTED: '已提交审核',
@@ -92,11 +106,14 @@ const enumLabels: Record<string, string> = {
   SUSPENDED: '已冻结',
   SYSTEM: '系统',
   SYSTEM_ADMIN_USER: '系统管理员',
+  TRADE_ORDER: '交易订单',
   UNKNOWN: '未知',
   UNHEALTHY: '异常',
   UNPUBLISHED: '已下架',
   WARNING: '需关注',
   WAREHOUSE_OPERATOR: '仓库操作员',
+  YSHOPPING_INTERNAL: '语兴好物（内部渠道）',
+  LOT_RECALLED: '批次已召回',
 };
 
 const successStates = new Set([
@@ -107,8 +124,10 @@ const successStates = new Set([
   'CAPTURED',
   'COMPLETED',
   'COMPLETION_PASSED',
+  'CONNECTED',
   'DELIVERED',
   'HEALTHY',
+  'INSPECTION_ACCEPTED',
   'PUBLISHED',
   'QUALIFIED',
   'READY',
@@ -142,10 +161,14 @@ export function cloudMoldEnumLabel(value: unknown): string {
     return '-';
   }
   const text = String(value);
+  const translated = enumLabels[text];
+  if (translated) {
+    return translated;
+  }
   if (!/^[A-Z][A-Z0-9_]*$/.test(text)) {
     return text;
   }
-  return enumLabels[text] ?? `未知（${text}）`;
+  return `未知（${text}）`;
 }
 
 export function cloudMoldStatusMeta(value: unknown): CloudMoldStatusMeta {

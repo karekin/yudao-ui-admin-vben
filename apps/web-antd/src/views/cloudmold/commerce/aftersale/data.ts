@@ -71,11 +71,7 @@ export function useAfterSaleColumns(): VxeTableGridOptions['columns'] {
       minWidth: 100,
       title: '尝试次数',
     },
-    {
-      field: 'resolutionSagaLastErrorCode',
-      minWidth: 140,
-      title: '错误编码',
-    },
+    enumColumn('resolutionSagaLastErrorCode', '错误原因', 140),
     { field: 'aggregateVersion', minWidth: 80, title: '版本' },
     timeColumn('createdAt', '创建时间'),
     timeColumn('updatedAt', '更新时间'),

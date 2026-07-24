@@ -178,19 +178,19 @@ watch(
             {{ dash(detail.warehouseCode) }}
           </DescriptionsItem>
           <DescriptionsItem label="仓库名称">
-            {{ dash(detail.warehouseName) }}
+            <CopyIdCell :value="detail.warehouseName" label="仓库名称" />
           </DescriptionsItem>
           <DescriptionsItem label="库位编码">
             {{ dash(detail.locationCode) }}
           </DescriptionsItem>
           <DescriptionsItem label="库位名称">
-            {{ dash(detail.locationName) }}
+            <CopyIdCell :value="detail.locationName" label="库位名称" />
           </DescriptionsItem>
           <DescriptionsItem label="批次编码">
             {{ dash(detail.lotCode) }}
           </DescriptionsItem>
           <DescriptionsItem label="计量单位">
-            {{ dash(detail.baseUomCode) }}
+            {{ cloudMoldEnumLabel(detail.baseUomCode) }}
           </DescriptionsItem>
         </Descriptions>
 
@@ -241,6 +241,18 @@ watch(
           <template #bodyCell="{ column, record }">
             <template v-if="column.dataIndex === 'occurredAt'">
               {{ formatDateTime(record.occurredAt) }}
+            </template>
+            <template v-else-if="column.dataIndex === 'commandType'">
+              {{ cloudMoldEnumLabel(record.commandType) }}
+            </template>
+            <template v-else-if="column.dataIndex === 'businessType'">
+              {{ cloudMoldEnumLabel(record.businessType) }}
+            </template>
+            <template v-else-if="column.dataIndex === 'entryRole'">
+              {{ cloudMoldEnumLabel(record.entryRole) }}
+            </template>
+            <template v-else-if="column.dataIndex === 'businessNo'">
+              <CopyIdCell :value="record.businessNo" label="业务单号" />
             </template>
             <template v-else-if="column.dataIndex === 'deltaOnHandQuantity'">
               {{ formatDecimal(record.deltaOnHandQuantity) }}

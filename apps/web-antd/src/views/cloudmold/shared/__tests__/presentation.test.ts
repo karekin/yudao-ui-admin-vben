@@ -9,6 +9,12 @@ describe('cloudmold 管理端展示规范', () => {
     expect(cloudMoldEnumLabel('DELIVERED')).toBe('已送达');
     expect(cloudMoldEnumLabel('INTERNAL_TEST')).toBe('内部测试');
     expect(cloudMoldEnumLabel('MIGRATION_OPENING')).toBe('迁移开账');
+    expect(cloudMoldEnumLabel('ALLOCATABLE')).toBe('可分配');
+    expect(cloudMoldEnumLabel('LOT_RECALLED')).toBe('批次已召回');
+    expect(cloudMoldEnumLabel('PCS')).toBe('件');
+    expect(cloudMoldEnumLabel('SIZE_NOT_FIT')).toBe('尺码不合适');
+    expect(cloudMoldEnumLabel('INSPECTION_ACCEPTED')).toBe('退货验收通过');
+    expect(cloudMoldEnumLabel('IllegalArgumentException')).toBe('参数校验失败');
     expect(cloudMoldEnumLabel('NOT_A_REAL_STATUS')).toBe(
       '未知（NOT_A_REAL_STATUS）',
     );

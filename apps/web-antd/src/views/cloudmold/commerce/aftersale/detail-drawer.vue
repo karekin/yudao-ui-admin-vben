@@ -17,6 +17,7 @@ import {
 import { getCloudMoldAfterSaleDetail } from '#/api/cloudmold/commerce';
 
 import CopyIdCell from '../../shared/copy-id-cell.vue';
+import { cloudMoldEnumLabel } from '../../shared/status-meta';
 import StatusTag from '../../shared/status-tag.vue';
 import { commerceStatusColor } from '../status';
 
@@ -43,10 +44,6 @@ const openProxy = computed({
 
 function formatMinor(minor?: null | number): string {
   return minor === undefined || minor === null ? '-' : (minor / 100).toFixed(2);
-}
-
-function dash(value?: null | string): string {
-  return value && value !== '' ? value : '-';
 }
 
 function orDash(value?: null | number): number | string {
@@ -142,19 +139,19 @@ watch(
             <StatusTag :label="detail.refundStatus" />
           </DescriptionsItem>
           <DescriptionsItem label="类型">
-            {{ dash(detail.afterSaleType) }}
+            {{ cloudMoldEnumLabel(detail.afterSaleType) }}
           </DescriptionsItem>
-          <DescriptionsItem label="原因编码">
-            {{ dash(detail.reasonCode) }}
+          <DescriptionsItem label="售后原因">
+            {{ cloudMoldEnumLabel(detail.reasonCode) }}
           </DescriptionsItem>
-          <DescriptionsItem label="责任编码">
-            {{ dash(detail.responsibility) }}
+          <DescriptionsItem label="责任方">
+            {{ cloudMoldEnumLabel(detail.responsibility) }}
           </DescriptionsItem>
           <DescriptionsItem label="批准金额(元)">
             {{ formatMinor(detail.approvedAmountMinor) }}
           </DescriptionsItem>
           <DescriptionsItem label="币种">
-            {{ dash(detail.currencyCode) }}
+            {{ cloudMoldEnumLabel(detail.currencyCode) }}
           </DescriptionsItem>
           <DescriptionsItem label="聚合版本">
             {{ detail.aggregateVersion }}
@@ -172,7 +169,7 @@ watch(
             <StatusTag :label="detail.resolutionSagaStatus" />
           </DescriptionsItem>
           <DescriptionsItem label="当前步骤">
-            {{ dash(detail.resolutionSagaActiveStep) }}
+            {{ cloudMoldEnumLabel(detail.resolutionSagaActiveStep) }}
           </DescriptionsItem>
           <DescriptionsItem label="尝试次数">
             {{ orDash(detail.resolutionSagaAttemptCount) }}
@@ -181,10 +178,13 @@ watch(
             {{ orDash(detail.resolutionSagaMaxAttempts) }}
           </DescriptionsItem>
           <DescriptionsItem label="最近错误编码">
-            {{ dash(detail.resolutionSagaLastErrorCode) }}
+            {{ cloudMoldEnumLabel(detail.resolutionSagaLastErrorCode) }}
           </DescriptionsItem>
           <DescriptionsItem label="最近错误信息" :span="2">
-            {{ dash(detail.resolutionSagaLastErrorMessage) }}
+            <CopyIdCell
+              :value="detail.resolutionSagaLastErrorMessage"
+              label="错误信息"
+            />
           </DescriptionsItem>
           <DescriptionsItem label="退款履约 ID">
             <CopyIdCell
@@ -217,7 +217,7 @@ watch(
             <CopyIdCell :value="detail.warehouseId" label="仓库 ID" />
           </DescriptionsItem>
           <DescriptionsItem label="计量单位">
-            {{ dash(detail.uomCode) }}
+            {{ cloudMoldEnumLabel(detail.uomCode) }}
           </DescriptionsItem>
         </Descriptions>
 
@@ -229,7 +229,7 @@ watch(
           class="mb-4"
         >
           <DescriptionsItem label="原因文本">
-            {{ dash(detail.reason) }}
+            <CopyIdCell :value="detail.reason" label="原因说明" />
           </DescriptionsItem>
         </Descriptions>
 
@@ -242,7 +242,13 @@ watch(
           size="small"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.dataIndex === 'canonicalSkuId'">
+            <template v-if="column.dataIndex === 'afterSaleItemId'">
+              <CopyIdCell :value="record.afterSaleItemId" label="售后行 ID" />
+            </template>
+            <template v-else-if="column.dataIndex === 'orderItemId'">
+              <CopyIdCell :value="record.orderItemId" label="订单行 ID" />
+            </template>
+            <template v-else-if="column.dataIndex === 'canonicalSkuId'">
               <CopyIdCell :value="record.canonicalSkuId" label="规范 SKU ID" />
             </template>
             <template v-else-if="column.dataIndex === 'lineAmountMinor'">

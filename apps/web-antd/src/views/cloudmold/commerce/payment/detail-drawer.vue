@@ -51,7 +51,12 @@ function formatMinor(minor?: null | number, currency?: string): string {
     return '-';
   }
   const yuan = (minor / 100).toFixed(2);
-  return currency ? `${yuan} ${currency}` : yuan;
+  if (!currency) {
+    return yuan;
+  }
+  return currency === 'CNY'
+    ? `${yuan} 元`
+    : `${yuan} ${cloudMoldEnumLabel(currency)}`;
 }
 
 async function load() {

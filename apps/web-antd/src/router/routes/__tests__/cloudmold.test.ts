@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import routes from '../modules/cloudmold';
 import operationsRoutes from '../modules/cloudmold-operations';
+import legacyMallRoutes from '../modules/mall';
 
 const root = routes[0]!;
 const operationsRoot = operationsRoutes[0]!;
@@ -124,6 +125,10 @@ describe('cloudmold administration navigation', () => {
       expect(route?.meta?.title).toBeDefined();
       expect(route?.redirect).toContain('/cloudmold/');
     });
+  });
+
+  it('keeps upstream Mall Product/Promotion/Trade routes disabled by default', () => {
+    expect(legacyMallRoutes).toEqual([]);
   });
 
   it('accounts for every current CloudMold page without exposing diagnostics', () => {

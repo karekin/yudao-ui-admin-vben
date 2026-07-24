@@ -47,11 +47,12 @@ function formatMinor(minor?: null | number, currency?: string): string {
     return '-';
   }
   const yuan = (minor / 100).toFixed(2);
-  return currency ? `${yuan} ${currency}` : yuan;
-}
-
-function dash(value?: null | string): string {
-  return value && value !== '' ? value : '-';
+  if (!currency) {
+    return yuan;
+  }
+  return currency === 'CNY'
+    ? `${yuan} 元`
+    : `${yuan} ${cloudMoldEnumLabel(currency)}`;
 }
 
 const itemColumns = [
@@ -155,7 +156,7 @@ watch(
             {{ detail.totalQuantity }}
           </DescriptionsItem>
           <DescriptionsItem label="迁移运行 ID">
-            {{ dash(detail.runId) }}
+            <CopyIdCell :value="detail.runId" label="迁移运行 ID" />
           </DescriptionsItem>
           <DescriptionsItem label="聚合版本">
             {{ detail.aggregateVersion }}
@@ -215,10 +216,10 @@ watch(
             {{ cloudMoldEnumLabel(detail.preCancellationStatus) }}
           </DescriptionsItem>
           <DescriptionsItem label="取消责任方">
-            {{ dash(detail.cancellationResponsibilityParty) }}
+            {{ cloudMoldEnumLabel(detail.cancellationResponsibilityParty) }}
           </DescriptionsItem>
           <DescriptionsItem label="取消责任码">
-            {{ dash(detail.cancellationResponsibilityCode) }}
+            {{ cloudMoldEnumLabel(detail.cancellationResponsibilityCode) }}
           </DescriptionsItem>
         </Descriptions>
 
@@ -247,10 +248,10 @@ watch(
               {{ formatMinor(record.netAmountMinor) }}
             </template>
             <template v-else-if="column.dataIndex === 'channelCode'">
-              {{ dash(record.channelCode) }}
+              {{ cloudMoldEnumLabel(record.channelCode) }}
             </template>
             <template v-else-if="column.dataIndex === 'shopId'">
-              {{ dash(record.shopId) }}
+              <CopyIdCell :value="record.shopId" label="店铺 ID" />
             </template>
           </template>
         </Table>
