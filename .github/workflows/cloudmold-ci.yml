@@ -58,3 +58,4 @@ jobs:
       - name: Build immutable Demo image
         run: >-
           docker build --file scripts/deploy/cloudmold-demo.Dockerfile --build-arg VCS_REF="${GITHUB_SHA}" --tag "cloudmold/admin-web:${GITHUB_SHA}" .
+
