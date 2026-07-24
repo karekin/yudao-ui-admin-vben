@@ -3,17 +3,21 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import {
   codeInput,
+  enumColumn,
   moneyColumn,
-  statusInput,
+  statusSelect,
   timeColumn,
+  withCloudMoldTableColumns,
 } from '../../shared/form-helpers';
+
+const paymentStatuses = ['CAPTURED', 'PARTIALLY_REFUNDED', 'REFUNDED'];
 
 export function usePaymentFormSchema(): VbenFormSchema[] {
   return [
     codeInput('paymentNo', '支付单号'),
     codeInput('orderId', '订单 ID'),
     codeInput('providerCode', '支付提供方'),
-    statusInput(),
+    statusSelect('status', paymentStatuses),
     {
       component: 'Select',
       componentProps: {
@@ -30,7 +34,7 @@ export function usePaymentFormSchema(): VbenFormSchema[] {
 }
 
 export function usePaymentColumns(): VxeTableGridOptions['columns'] {
-  return [
+  return withCloudMoldTableColumns([
     {
       field: 'paymentNo',
       fixed: 'left',
@@ -49,7 +53,7 @@ export function usePaymentColumns(): VxeTableGridOptions['columns'] {
     moneyColumn('capturedAmountMinor', '已收（元）'),
     moneyColumn('refundedAmountMinor', '已退（元）'),
     moneyColumn('remainingAmountMinor', '可退余额（元）'),
-    { field: 'providerCode', minWidth: 130, title: '支付提供方' },
+    enumColumn('providerCode', '支付提供方', 130),
     {
       field: 'testMode',
       minWidth: 110,
@@ -72,5 +76,5 @@ export function usePaymentColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'action' },
       title: '操作',
     },
-  ];
+  ]);
 }

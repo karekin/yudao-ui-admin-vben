@@ -121,14 +121,11 @@ const [LedgerGrid] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <EvidenceAlert
-      message="CloudMold 规范库存权威"
-      description="本页只读取 CloudMold Inventory v3 的精确货主 / SKU / 仓库 / 库位 / Lot / 状态 / UOM 粒度，不读 product_sku.stock、erp_stock 或 wms_inventory 权威字段。"
-    />
+    <EvidenceAlert page="inventory" />
 
     <Tabs class="w-full">
       <Tabs.TabPane key="balances" tab="库存余额">
-        <BalanceGrid table-title="规范库存余额">
+        <BalanceGrid table-title="库存余额">
           <template #stock-status="{ row }">
             <StatusTag v-bind="getMeta(stockStatusMeta, row.stockStatus)" />
           </template>
@@ -151,7 +148,7 @@ const [LedgerGrid] = useVbenVxeGrid({
       </Tabs.TabPane>
 
       <Tabs.TabPane key="reservations" tab="预占与分配">
-        <ReservationGrid table-title="规范库存预占">
+        <ReservationGrid table-title="库存预占">
           <template #reservation-status="{ row }">
             <StatusTag v-bind="getMeta(reservationStatusMeta, row.status)" />
           </template>
@@ -167,7 +164,7 @@ const [LedgerGrid] = useVbenVxeGrid({
       </Tabs.TabPane>
 
       <Tabs.TabPane key="ledger" tab="不可变账本">
-        <LedgerGrid table-title="规范库存账本">
+        <LedgerGrid table-title="库存流水">
           <template #quantity="{ row, column }">
             {{ formatDecimal(getFieldValue(row, column.field)) }}
           </template>

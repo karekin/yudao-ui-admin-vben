@@ -103,18 +103,9 @@ function handleDeliver(row: CloudMoldCommerceApi.Fulfillment) {
 
 <template>
   <Page auto-content-height>
-    <EvidenceAlert
-      message="CloudMold 规范 Fulfillment 权威"
-      description="本页读取 CloudMold Fulfillment 规范表，并支持履约状态转换（标记在途/投递完成，幂等命令 + 乐观版本）；履约意图与发运事实分离，不读取 yudao Mall Trade 或 ERP / WMS 业务表。"
-    />
+    <EvidenceAlert page="fulfillment" />
 
-    <EvidenceAlert
-      type="warning"
-      message="当前为单发运首切片"
-      description="页面展示正向履约和首个发运事实；多包裹与异常物流仍是后续验收门禁。"
-    />
-
-    <Grid table-title="规范 Fulfillment">
+    <Grid table-title="发货履约">
       <template #fulfillment-no="{ row }">
         <CopyIdCell :value="row.fulfillmentNo" label="履约单号" />
       </template>
@@ -123,6 +114,9 @@ function handleDeliver(row: CloudMoldCommerceApi.Fulfillment) {
           :color="commerceStatusColor(row.status)"
           :label="row.status"
         />
+      </template>
+      <template #shipment-status="{ row }">
+        <StatusTag :label="row.firstSliceShipmentStatus" />
       </template>
       <template #action="{ row }">
         <TableAction

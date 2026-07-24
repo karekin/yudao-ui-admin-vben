@@ -20,6 +20,8 @@ import CopyIdCell from '../shared/copy-id-cell.vue';
 import StatusTag from '../shared/status-tag.vue';
 import { catalogStatusMeta } from './data';
 
+import '../shared/detail-layout.css';
+
 defineOptions({ name: 'CloudMoldCatalogDetailDrawer' });
 
 const props = defineProps<{
@@ -87,17 +89,18 @@ watch(
 <template>
   <Drawer
     v-model:open="openProxy"
-    title="规范 SKU 详情"
+    class="cloudmold-detail-drawer"
+    title="商品详情"
     placement="right"
-    width="720"
+    width="min(920px, calc(100vw - 24px))"
     :destroy-on-close="true"
   >
     <Spin :spinning="loading">
       <Result
         v-if="!loading && !detail"
         status="info"
-        title="未找到权威数据"
-        sub-title="该 SKU 不存在、不属于当前租户或暂无 CloudMold 权威数据。"
+        title="未找到商品"
+        sub-title="该商品不存在，或当前账号没有查看权限。"
       />
       <template v-else-if="detail">
         <Descriptions

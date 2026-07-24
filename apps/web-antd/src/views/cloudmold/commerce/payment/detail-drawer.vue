@@ -17,8 +17,11 @@ import {
 import { getCloudMoldPaymentDetail } from '#/api/cloudmold/commerce';
 
 import CopyIdCell from '../../shared/copy-id-cell.vue';
+import { cloudMoldEnumLabel } from '../../shared/status-meta';
 import StatusTag from '../../shared/status-tag.vue';
 import { commerceStatusColor } from '../status';
+
+import '../../shared/detail-layout.css';
 
 defineOptions({ name: 'CloudMoldCommercePaymentDetailDrawer' });
 
@@ -39,16 +42,16 @@ const openProxy = computed({
   set: (value) => emit('update:open', value),
 });
 
+function dash(value?: null | string): string {
+  return value && value !== '' ? value : '-';
+}
+
 function formatMinor(minor?: null | number, currency?: string): string {
   if (minor === null || minor === undefined) {
     return '-';
   }
   const yuan = (minor / 100).toFixed(2);
   return currency ? `${yuan} ${currency}` : yuan;
-}
-
-function dash(value?: null | string): string {
-  return value && value !== '' ? value : '-';
 }
 
 async function load() {
@@ -78,17 +81,18 @@ watch(
 <template>
   <Drawer
     v-model:open="openProxy"
-    title="规范支付详情"
+    class="cloudmold-detail-drawer"
+    title="支付详情"
     placement="right"
-    width="720"
+    width="min(920px, calc(100vw - 24px))"
     :destroy-on-close="true"
   >
     <Spin :spinning="loading">
       <Result
         v-if="!loading && !detail"
         status="info"
-        title="未找到权威数据"
-        sub-title="该支付单不存在、不属于当前租户或暂无 CloudMold 权威数据。"
+        title="未找到支付记录"
+        sub-title="该支付记录不存在，或当前账号没有查看权限。"
       />
       <template v-else-if="detail">
         <Descriptions
@@ -115,11 +119,11 @@ watch(
           </DescriptionsItem>
           <DescriptionsItem label="通道模式">
             <Tag :color="detail.testMode ? 'warning' : 'success'">
-              {{ detail.testMode ? 'INTERNAL_TEST' : '真实通道' }}
+              {{ detail.testMode ? '内部测试' : '真实通道' }}
             </Tag>
           </DescriptionsItem>
           <DescriptionsItem label="执行语义">
-            {{ dash(detail.executionMode) }}
+            {{ cloudMoldEnumLabel(detail.executionMode) }}
           </DescriptionsItem>
           <DescriptionsItem label="聚合版本">
             {{ detail.aggregateVersion }}
@@ -158,7 +162,10 @@ watch(
             {{ dash(detail.providerCode) }}
           </DescriptionsItem>
           <DescriptionsItem label="提供方流水（脱敏）">
-            {{ dash(detail.providerTransactionReferenceMasked) }}
+            <CopyIdCell
+              :value="detail.providerTransactionReferenceMasked"
+              label="支付流水"
+            />
           </DescriptionsItem>
         </Descriptions>
 

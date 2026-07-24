@@ -105,12 +105,9 @@ async function handleApprove(row: CloudMoldCommerceApi.AfterSale) {
 
 <template>
   <Page auto-content-height>
-    <EvidenceAlert
-      message="CloudMold 规范 AfterSale 权威"
-      description="本页读取 CloudMold AfterSale 规范表，并支持售后审核（APPROVE，幂等命令 + 乐观版本，reviewer 为当前管理员 principal）；售后决策、逆向物流、退款与库存返还彼此分离，不读取 yudao Mall Trade 业务表。"
-    />
+    <EvidenceAlert page="aftersale" />
 
-    <Grid table-title="规范 AfterSale">
+    <Grid table-title="售后退款">
       <template #after-sale-no="{ row }">
         <CopyIdCell :value="row.afterSaleNo" label="售后单号" />
       </template>
@@ -119,6 +116,12 @@ async function handleApprove(row: CloudMoldCommerceApi.AfterSale) {
           :color="commerceStatusColor(row.caseStatus)"
           :label="row.caseStatus"
         />
+      </template>
+      <template #refund-status="{ row }">
+        <StatusTag :label="row.refundStatus" />
+      </template>
+      <template #saga-status="{ row }">
+        <StatusTag :label="row.resolutionSagaStatus" />
       </template>
       <template #action="{ row }">
         <TableAction

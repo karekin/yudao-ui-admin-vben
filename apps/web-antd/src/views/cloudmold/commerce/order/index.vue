@@ -99,12 +99,9 @@ function handleComplete(row: CloudMoldCommerceApi.Order) {
 
 <template>
   <Page auto-content-height>
-    <EvidenceAlert
-      message="CloudMold 规范 Order 权威"
-      description="本页读取 CloudMold Order 规范表，并支持订单状态转换（库存确认/完成，幂等命令 + 乐观版本）；订单、资金事实与支付通道状态彼此分离，不读取 yudao Mall Trade 业务表。"
-    />
+    <EvidenceAlert page="order" />
 
-    <Grid table-title="规范 Order">
+    <Grid table-title="订单">
       <template #order-no="{ row }">
         <CopyIdCell :value="row.orderNo" label="订单号" />
       </template>
@@ -113,6 +110,12 @@ function handleComplete(row: CloudMoldCommerceApi.Order) {
           :color="commerceStatusColor(row.status)"
           :label="row.status"
         />
+      </template>
+      <template #payment-status="{ row }">
+        <StatusTag :label="row.paymentStatus" />
+      </template>
+      <template #fulfillment-status="{ row }">
+        <StatusTag :label="row.fulfillmentStatus" />
       </template>
       <template #action="{ row }">
         <TableAction

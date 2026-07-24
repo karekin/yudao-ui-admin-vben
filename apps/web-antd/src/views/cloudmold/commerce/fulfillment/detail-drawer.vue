@@ -20,6 +20,8 @@ import CopyIdCell from '../../shared/copy-id-cell.vue';
 import StatusTag from '../../shared/status-tag.vue';
 import { commerceStatusColor } from '../status';
 
+import '../../shared/detail-layout.css';
+
 defineOptions({ name: 'CloudMoldCommerceFulfillmentDetailDrawer' });
 
 const props = defineProps<{
@@ -77,17 +79,18 @@ watch(
 <template>
   <Drawer
     v-model:open="openProxy"
-    title="规范履约详情"
+    class="cloudmold-detail-drawer"
+    title="发货详情"
     placement="right"
-    width="780"
+    width="min(920px, calc(100vw - 24px))"
     :destroy-on-close="true"
   >
     <Spin :spinning="loading">
       <Result
         v-if="!loading && !detail"
         status="info"
-        title="未找到权威数据"
-        sub-title="该履约单不存在、不属于当前租户或暂无 CloudMold 权威数据。"
+        title="未找到发货记录"
+        sub-title="该发货记录不存在，或当前账号没有查看权限。"
       />
       <template v-else-if="detail">
         <Descriptions
@@ -143,13 +146,13 @@ watch(
             <CopyIdCell :value="detail.firstSliceShipmentId" label="发运 ID" />
           </DescriptionsItem>
           <DescriptionsItem label="发运状态">
-            {{ dash(detail.firstSliceShipmentStatus) }}
+            <StatusTag :label="detail.firstSliceShipmentStatus" />
           </DescriptionsItem>
           <DescriptionsItem label="承运商">
             {{ dash(detail.carrierCode) }}
           </DescriptionsItem>
           <DescriptionsItem label="运单号">
-            {{ dash(detail.waybillNo) }}
+            <CopyIdCell :value="detail.waybillNo" label="运单号" />
           </DescriptionsItem>
           <DescriptionsItem label="承诺送达">
             {{
@@ -159,7 +162,10 @@ watch(
             }}
           </DescriptionsItem>
           <DescriptionsItem label="承诺版本引用">
-            {{ dash(detail.deliveryPromiseVersionRef) }}
+            <CopyIdCell
+              :value="detail.deliveryPromiseVersionRef"
+              label="承诺版本"
+            />
           </DescriptionsItem>
           <DescriptionsItem label="取消引用" :span="2">
             <CopyIdCell :value="detail.cancellationRef" label="取消引用" />
@@ -175,7 +181,10 @@ watch(
           size="small"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.dataIndex === 'canonicalSkuId'">
+            <template v-if="column.dataIndex === 'orderItemId'">
+              <CopyIdCell :value="record.orderItemId" label="订单行 ID" />
+            </template>
+            <template v-else-if="column.dataIndex === 'canonicalSkuId'">
               <CopyIdCell :value="record.canonicalSkuId" label="规范 SKU ID" />
             </template>
             <template v-else-if="column.dataIndex === 'reservationId'">

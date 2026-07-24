@@ -3,9 +3,11 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
 import {
   codeInput,
+  enumColumn,
   moneyColumn,
-  statusInput,
+  statusSelect,
   timeColumn,
+  withCloudMoldTableColumns,
 } from '../../shared/form-helpers';
 
 /** Listing 状态机枚举（值用于行内按钮 ifShow 比较） */
@@ -28,12 +30,12 @@ export function useListingFormSchema(): VbenFormSchema[] {
     codeInput('title', '标题'),
     codeInput('channelCode', '渠道编码'),
     codeInput('shopId', '店铺 ID'),
-    statusInput(),
+    statusSelect('status', Object.values(ListingStatus)),
   ];
 }
 
 export function useListingColumns(): VxeTableGridOptions['columns'] {
-  return [
+  return withCloudMoldTableColumns([
     {
       field: 'listingNo',
       fixed: 'left',
@@ -42,7 +44,7 @@ export function useListingColumns(): VxeTableGridOptions['columns'] {
       title: '刊登单号',
     },
     { field: 'title', minWidth: 220, title: '标题' },
-    { field: 'channelCode', minWidth: 110, title: '渠道' },
+    enumColumn('channelCode', '渠道', 110),
     { field: 'shopId', minWidth: 150, title: '店铺 ID' },
     { field: 'canonicalSpuId', minWidth: 180, title: '规范 SPU ID' },
     { field: 'revision', minWidth: 80, title: '修订' },
@@ -70,5 +72,5 @@ export function useListingColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'action' },
       title: '操作',
     },
-  ];
+  ]);
 }

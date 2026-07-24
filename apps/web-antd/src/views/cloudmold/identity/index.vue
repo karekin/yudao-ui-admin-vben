@@ -112,14 +112,11 @@ const [OperationGrid] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <EvidenceAlert
-      message="CloudMold 规范身份权威"
-      description="本页只读取 CloudMold 身份主体 / 来源身份 / 操作记录规范表；System/Member 账号不等于 canonical Principal。按当前租户隔离，不读取 yudao 旧 member/system 业务表。"
-    />
+    <EvidenceAlert page="identity" />
 
     <Tabs class="w-full">
       <Tabs.TabPane key="principals" tab="身份主体">
-        <PrincipalGrid table-title="规范身份主体">
+        <PrincipalGrid table-title="经营身份">
           <template #principal-id="{ row }">
             <CopyIdCell :value="row.principalId" label="身份主体 ID" />
           </template>
@@ -133,7 +130,7 @@ const [OperationGrid] = useVbenVxeGrid({
       </Tabs.TabPane>
 
       <Tabs.TabPane key="sources" tab="来源身份">
-        <SourceGrid table-title="规范来源身份">
+        <SourceGrid table-title="外部账号绑定">
           <template #source-id="{ row }">
             <CopyIdCell :value="row.sourceIdentityId" label="来源身份 ID" />
           </template>

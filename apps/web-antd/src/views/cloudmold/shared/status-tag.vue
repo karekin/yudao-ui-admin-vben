@@ -1,5 +1,9 @@
 <script lang="ts" setup>
+import { computed } from 'vue';
+
 import { Tag } from 'ant-design-vue';
+
+import { cloudMoldStatusMeta } from './status-meta';
 
 /**
  * CloudMold 红区统一的状态标签渲染。
@@ -14,13 +18,23 @@ interface Props {
   label?: null | number | string | undefined;
 }
 
-withDefaults(defineProps<Props>(), {
-  color: 'default',
-  fallback: 'UNKNOWN',
+const props = withDefaults(defineProps<Props>(), {
+  color: undefined,
+  fallback: '未知',
   label: null,
 });
+
+const metadata = computed(() => cloudMoldStatusMeta(props.label));
+const displayLabel = computed(() =>
+  props.label === null || props.label === undefined || props.label === ''
+    ? props.fallback
+    : metadata.value.label,
+);
+const displayColor = computed(() => props.color ?? metadata.value.color);
 </script>
 
 <template>
-  <Tag :color="color">{{ label ?? fallback }}</Tag>
+  <Tag :color="displayColor" class="whitespace-nowrap">
+    {{ displayLabel }}
+  </Tag>
 </template>

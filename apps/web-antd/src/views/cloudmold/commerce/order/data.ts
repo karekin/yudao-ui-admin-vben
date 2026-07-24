@@ -4,8 +4,9 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import {
   codeInput,
   moneyColumn,
-  statusInput,
+  statusSelect,
   timeColumn,
+  withCloudMoldTableColumns,
 } from '../../shared/form-helpers';
 
 /** Order 订单状态机枚举（值用于行内按钮 ifShow 比较） */
@@ -23,12 +24,12 @@ export function useOrderFormSchema(): VbenFormSchema[] {
   return [
     codeInput('orderNo', '订单号'),
     codeInput('buyerId', '规范买家 ID'),
-    statusInput(),
+    statusSelect('status', Object.values(OrderStatus)),
   ];
 }
 
 export function useOrderColumns(): VxeTableGridOptions['columns'] {
-  return [
+  return withCloudMoldTableColumns([
     {
       field: 'orderNo',
       fixed: 'left',
@@ -51,9 +52,19 @@ export function useOrderColumns(): VxeTableGridOptions['columns'] {
     moneyColumn('payableAmountMinor', '应付（元）'),
     { field: 'currencyCode', minWidth: 80, title: '币种' },
     { field: 'paymentId', minWidth: 180, title: '支付 ID' },
-    { field: 'paymentStatus', minWidth: 130, title: '支付状态' },
+    {
+      field: 'paymentStatus',
+      minWidth: 130,
+      slots: { default: 'payment-status' },
+      title: '支付状态',
+    },
     { field: 'fulfillmentId', minWidth: 180, title: '履约 ID' },
-    { field: 'fulfillmentStatus', minWidth: 130, title: '履约状态' },
+    {
+      field: 'fulfillmentStatus',
+      minWidth: 130,
+      slots: { default: 'fulfillment-status' },
+      title: '履约状态',
+    },
     { field: 'shipmentId', minWidth: 180, title: '发运 ID' },
     { field: 'refundId', minWidth: 180, title: '退款 ID' },
     { field: 'cancellationSagaId', minWidth: 180, title: '取消 Saga' },
@@ -67,5 +78,5 @@ export function useOrderColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'action' },
       title: '操作',
     },
-  ];
+  ]);
 }

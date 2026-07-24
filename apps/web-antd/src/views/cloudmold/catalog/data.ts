@@ -1,6 +1,8 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
+import { enumColumn, withCloudMoldTableColumns } from '../shared/form-helpers';
+
 export const catalogStatusMeta: Record<
   number,
   { color: string; label: string }
@@ -48,7 +50,7 @@ export function useGridFormSchema(): VbenFormSchema[] {
 }
 
 export function useGridColumns(): VxeTableGridOptions['columns'] {
-  return [
+  return withCloudMoldTableColumns([
     {
       field: 'skuCode',
       fixed: 'left',
@@ -88,11 +90,7 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       title: '主条码',
       minWidth: 150,
     },
-    {
-      field: 'baseUomCode',
-      title: '基础 UOM',
-      minWidth: 100,
-    },
+    enumColumn('baseUomCode', '计量单位', 100),
     {
       field: 'catalogStatus',
       title: '生命周期',
@@ -117,5 +115,5 @@ export function useGridColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'action' },
       title: '操作',
     },
-  ];
+  ]);
 }

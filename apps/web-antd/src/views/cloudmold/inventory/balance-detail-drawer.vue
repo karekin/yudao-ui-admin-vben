@@ -17,12 +17,15 @@ import {
 import { getCloudMoldInventoryBalanceDetail } from '#/api/cloudmold/inventory';
 
 import CopyIdCell from '../shared/copy-id-cell.vue';
+import { cloudMoldEnumLabel } from '../shared/status-meta';
 import StatusTag from '../shared/status-tag.vue';
 import {
   qualityStatusMeta,
   reservationStatusMeta,
   stockStatusMeta,
 } from './data';
+
+import '../shared/detail-layout.css';
 
 defineOptions({ name: 'CloudMoldInventoryBalanceDetailDrawer' });
 
@@ -123,17 +126,18 @@ watch(
 <template>
   <Drawer
     v-model:open="openProxy"
-    title="规范库存余额详情"
+    class="cloudmold-detail-drawer"
+    title="库存明细"
     placement="right"
-    width="860"
+    width="min(920px, calc(100vw - 24px))"
     :destroy-on-close="true"
   >
     <Spin :spinning="loading">
       <Result
         v-if="!loading && !detail"
         status="info"
-        title="未找到权威数据"
-        sub-title="该余额不存在、不属于当前租户或暂无 CloudMold 权威数据。"
+        title="未找到库存"
+        sub-title="该库存记录不存在，或当前账号没有查看权限。"
       />
       <template v-else-if="detail">
         <Descriptions
@@ -156,7 +160,7 @@ watch(
             {{ dash(detail.spuCode) }}
           </DescriptionsItem>
           <DescriptionsItem label="货主类型">
-            {{ dash(detail.ownerType) }}
+            {{ cloudMoldEnumLabel(detail.ownerType) }}
           </DescriptionsItem>
           <DescriptionsItem label="货主 ID">
             <CopyIdCell :value="detail.ownerId" label="货主 ID" />
@@ -204,7 +208,7 @@ watch(
             <StatusTag v-bind="meta(qualityStatusMeta, detail.qualityStatus)" />
           </DescriptionsItem>
           <DescriptionsItem label="分配资格" :span="2">
-            {{ dash(detail.allocationEligibility) }}
+            {{ cloudMoldEnumLabel(detail.allocationEligibility) }}
           </DescriptionsItem>
           <DescriptionsItem label="在手">
             {{ formatDecimal(detail.onHandQuantity) }}

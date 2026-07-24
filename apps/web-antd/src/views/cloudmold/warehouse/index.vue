@@ -176,14 +176,11 @@ const locationActions = entityTransition(changeLocationStatus, '库位', () =>
 
 <template>
   <Page auto-content-height>
-    <EvidenceAlert
-      message="CloudMold 规范仓网主数据权威"
-      description="本页读取 CloudMold 仓库/库区/库位主数据规范表，并支持状态转换（启用/停用，幂等命令 + 乐观版本）；Warehouse Network 管主数据，Inventory 管数量账本，WMS 管物理作业，三者不混。不读取 yudao 旧 WMS 业务表。"
-    />
+    <EvidenceAlert page="warehouse" />
 
     <Tabs class="w-full">
       <Tabs.TabPane key="warehouses" tab="仓库">
-        <WarehouseGrid table-title="规范仓库">
+        <WarehouseGrid table-title="仓库">
           <template #warehouse-code="{ row }">
             <CopyIdCell :value="row.warehouseCode" label="仓库编码" />
           </template>
@@ -220,7 +217,7 @@ const locationActions = entityTransition(changeLocationStatus, '库位', () =>
       </Tabs.TabPane>
 
       <Tabs.TabPane key="zones" tab="库区">
-        <ZoneGrid table-title="规范库区">
+        <ZoneGrid table-title="库区">
           <template #zone-code="{ row }">
             <CopyIdCell :value="row.zoneCode" label="库区编码" />
           </template>
@@ -249,7 +246,7 @@ const locationActions = entityTransition(changeLocationStatus, '库位', () =>
       </Tabs.TabPane>
 
       <Tabs.TabPane key="locations" tab="库位">
-        <LocationGrid table-title="规范库位">
+        <LocationGrid table-title="库位">
           <template #location-code="{ row }">
             <CopyIdCell :value="row.locationCode" label="库位编码" />
           </template>

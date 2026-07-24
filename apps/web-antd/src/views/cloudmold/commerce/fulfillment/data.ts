@@ -1,7 +1,13 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
-import { codeInput, statusInput, timeColumn } from '../../shared/form-helpers';
+import {
+  codeInput,
+  enumColumn,
+  statusSelect,
+  timeColumn,
+  withCloudMoldTableColumns,
+} from '../../shared/form-helpers';
 
 /** Fulfillment 履约状态机枚举（值用于行内按钮 ifShow 比较） */
 export const FulfillmentStatus = {
@@ -19,12 +25,12 @@ export function useFulfillmentFormSchema(): VbenFormSchema[] {
     codeInput('orderNo', '订单号'),
     codeInput('warehouseId', '仓库 ID'),
     codeInput('waybillNo', '运单号'),
-    statusInput(),
+    statusSelect('status', Object.values(FulfillmentStatus)),
   ];
 }
 
 export function useFulfillmentColumns(): VxeTableGridOptions['columns'] {
-  return [
+  return withCloudMoldTableColumns([
     {
       field: 'fulfillmentNo',
       fixed: 'left',
@@ -43,8 +49,13 @@ export function useFulfillmentColumns(): VxeTableGridOptions['columns'] {
     { field: 'warehouseId', minWidth: 150, title: '仓库 ID' },
     { field: 'itemCount', minWidth: 90, title: '行数' },
     { field: 'totalQuantity', minWidth: 100, title: '总数量' },
-    { field: 'firstSliceShipmentStatus', minWidth: 130, title: '发运状态' },
-    { field: 'carrierCode', minWidth: 110, title: '承运商' },
+    {
+      field: 'firstSliceShipmentStatus',
+      minWidth: 130,
+      slots: { default: 'shipment-status' },
+      title: '发运状态',
+    },
+    enumColumn('carrierCode', '承运商', 110),
     { field: 'waybillNo', minWidth: 160, title: '运单号' },
     timeColumn('promisedDeliveryAt', '承诺送达'),
     { field: 'cancellationRef', minWidth: 180, title: '取消引用' },
@@ -57,5 +68,5 @@ export function useFulfillmentColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'action' },
       title: '操作',
     },
-  ];
+  ]);
 }

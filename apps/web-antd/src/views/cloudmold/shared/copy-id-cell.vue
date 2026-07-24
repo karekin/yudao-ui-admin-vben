@@ -1,7 +1,9 @@
 <script lang="ts" setup>
 import { computed } from 'vue';
 
-import { Button } from 'ant-design-vue';
+import { IconifyIcon } from '@vben/icons';
+
+import { Button, Tooltip } from 'ant-design-vue';
 
 import { useCopyId } from './use-copy-id';
 
@@ -32,16 +34,27 @@ const display = computed(() => {
 </script>
 
 <template>
-  <span class="inline-flex items-center gap-1">
-    <span>{{ display }}</span>
-    <Button
-      type="link"
-      size="small"
-      class="h-auto px-1 py-0"
-      :disabled="display === '-'"
-      @click="copyId(value, label)"
-    >
-      复制
-    </Button>
+  <span
+    class="group inline-flex min-w-0 max-w-full items-center gap-1 whitespace-nowrap"
+  >
+    <Tooltip :title="display" placement="topLeft">
+      <span
+        class="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"
+      >
+        {{ display }}
+      </span>
+    </Tooltip>
+    <Tooltip title="复制完整内容">
+      <Button
+        type="text"
+        size="small"
+        class="h-6 w-6 shrink-0 p-0 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
+        :disabled="display === '-'"
+        :aria-label="`复制${label}`"
+        @click.stop="copyId(value, label)"
+      >
+        <IconifyIcon icon="lucide:copy" class="text-sm" />
+      </Button>
+    </Tooltip>
   </span>
 </template>

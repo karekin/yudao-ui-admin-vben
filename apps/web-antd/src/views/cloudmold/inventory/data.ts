@@ -1,7 +1,12 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
-import { codeInput } from '../shared/form-helpers';
+import {
+  codeInput,
+  enumColumn,
+  withCloudMoldTableColumns,
+} from '../shared/form-helpers';
+import { cloudMoldEnumLabel } from '../shared/status-meta';
 
 export const reservationStatusMeta: Record<
   number,
@@ -99,7 +104,7 @@ export function useLedgerFormSchema(): VbenFormSchema[] {
           'RETURN',
           'RELEASE',
           'MIGRATION_OPENING',
-        ].map((value) => ({ label: value, value })),
+        ].map((value) => ({ label: cloudMoldEnumLabel(value), value })),
       },
       fieldName: 'commandType',
       label: '动作',
@@ -108,13 +113,13 @@ export function useLedgerFormSchema(): VbenFormSchema[] {
 }
 
 export function useBalanceColumns(): VxeTableGridOptions['columns'] {
-  return [
+  return withCloudMoldTableColumns([
     { field: 'skuCode', fixed: 'left', minWidth: 190, title: '规范 SKU' },
     { field: 'spuCode', minWidth: 150, title: 'SPU' },
     { field: 'warehouseCode', minWidth: 140, title: '仓库' },
     { field: 'locationCode', minWidth: 140, title: '库位' },
     { field: 'lotCode', minWidth: 140, title: '批次' },
-    { field: 'ownerType', minWidth: 110, title: '货主类型' },
+    enumColumn('ownerType', '货主类型', 110),
     { field: 'ownerId', minWidth: 200, title: '货主 ID' },
     {
       field: 'stockStatus',
@@ -152,18 +157,14 @@ export function useBalanceColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'quantity' },
       title: '可分配',
     },
-    {
-      field: 'allocationEligibility',
-      minWidth: 170,
-      title: '分配资格',
-    },
+    enumColumn('allocationEligibility', '分配资格', 170),
     {
       field: 'inTransitQuantity',
       minWidth: 110,
       slots: { default: 'quantity' },
       title: '在途',
     },
-    { field: 'baseUomCode', minWidth: 90, title: 'UOM' },
+    enumColumn('baseUomCode', '计量单位', 90),
     { field: 'aggregateVersion', minWidth: 90, title: '版本' },
     {
       field: 'updatedAt',
@@ -178,11 +179,11 @@ export function useBalanceColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'action' },
       title: '操作',
     },
-  ];
+  ]);
 }
 
 export function useReservationColumns(): VxeTableGridOptions['columns'] {
-  return [
+  return withCloudMoldTableColumns([
     {
       field: 'reservationId',
       fixed: 'left',
@@ -190,7 +191,7 @@ export function useReservationColumns(): VxeTableGridOptions['columns'] {
       title: '预占 ID',
     },
     { field: 'allocationId', minWidth: 220, title: '分配 ID' },
-    { field: 'businessType', minWidth: 130, title: '业务类型' },
+    enumColumn('businessType', '业务类型', 130),
     { field: 'businessId', minWidth: 180, title: '业务 ID' },
     { field: 'businessItemId', minWidth: 180, title: '业务行 ID' },
     { field: 'skuCode', minWidth: 180, title: '规范 SKU' },
@@ -221,7 +222,7 @@ export function useReservationColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'allocation-status' },
       title: '分配状态',
     },
-    { field: 'baseUomCode', minWidth: 90, title: 'UOM' },
+    enumColumn('baseUomCode', '计量单位', 90),
     { field: 'version', minWidth: 90, title: '版本' },
     {
       field: 'updatedAt',
@@ -229,21 +230,21 @@ export function useReservationColumns(): VxeTableGridOptions['columns'] {
       minWidth: 170,
       title: '更新时间',
     },
-  ];
+  ]);
 }
 
 export function useLedgerColumns(): VxeTableGridOptions['columns'] {
-  return [
+  return withCloudMoldTableColumns([
     {
       field: 'ledgerEntryId',
       fixed: 'left',
       minWidth: 110,
       title: '分录 ID',
     },
-    { field: 'commandType', minWidth: 140, title: '动作' },
-    { field: 'entryRole', minWidth: 90, title: '分录角色' },
+    enumColumn('commandType', '动作', 140),
+    enumColumn('entryRole', '分录角色', 100),
     { field: 'businessNo', minWidth: 180, title: '业务单号' },
-    { field: 'businessType', minWidth: 130, title: '业务类型' },
+    enumColumn('businessType', '业务类型', 130),
     { field: 'skuCode', minWidth: 180, title: '规范 SKU' },
     { field: 'warehouseCode', minWidth: 130, title: '仓库' },
     { field: 'locationCode', minWidth: 130, title: '库位' },
@@ -266,7 +267,7 @@ export function useLedgerColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'quantity' },
       title: '在途变化',
     },
-    { field: 'baseUomCode', minWidth: 90, title: 'UOM' },
+    enumColumn('baseUomCode', '计量单位', 90),
     { field: 'aggregateVersion', minWidth: 90, title: '版本' },
     {
       field: 'occurredAt',
@@ -274,5 +275,5 @@ export function useLedgerColumns(): VxeTableGridOptions['columns'] {
       minWidth: 170,
       title: '发生时间',
     },
-  ];
+  ]);
 }

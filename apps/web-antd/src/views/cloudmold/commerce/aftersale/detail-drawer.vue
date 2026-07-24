@@ -20,6 +20,8 @@ import CopyIdCell from '../../shared/copy-id-cell.vue';
 import StatusTag from '../../shared/status-tag.vue';
 import { commerceStatusColor } from '../status';
 
+import '../../shared/detail-layout.css';
+
 defineOptions({ name: 'CloudMoldCommerceAfterSaleDetailDrawer' });
 
 const props = defineProps<{
@@ -97,17 +99,18 @@ watch(
 <template>
   <Drawer
     v-model:open="openProxy"
-    title="规范售后详情"
+    class="cloudmold-detail-drawer"
+    title="售后详情"
     placement="right"
-    width="820"
+    width="min(960px, calc(100vw - 24px))"
     :destroy-on-close="true"
   >
     <Spin :spinning="loading">
       <Result
         v-if="!loading && !detail"
         status="info"
-        title="未找到权威数据"
-        sub-title="该售后案例不存在、不属于当前租户或暂无 CloudMold 权威数据。"
+        title="未找到售后记录"
+        sub-title="该售后记录不存在，或当前账号没有查看权限。"
       />
       <template v-else-if="detail">
         <Descriptions
@@ -136,7 +139,7 @@ watch(
             />
           </DescriptionsItem>
           <DescriptionsItem label="退款状态">
-            {{ dash(detail.refundStatus) }}
+            <StatusTag :label="detail.refundStatus" />
           </DescriptionsItem>
           <DescriptionsItem label="类型">
             {{ dash(detail.afterSaleType) }}
@@ -166,7 +169,7 @@ watch(
           class="mb-4"
         >
           <DescriptionsItem label="编排状态">
-            {{ dash(detail.resolutionSagaStatus) }}
+            <StatusTag :label="detail.resolutionSagaStatus" />
           </DescriptionsItem>
           <DescriptionsItem label="当前步骤">
             {{ dash(detail.resolutionSagaActiveStep) }}
@@ -190,7 +193,7 @@ watch(
             />
           </DescriptionsItem>
           <DescriptionsItem label="退款履约状态">
-            {{ dash(detail.returnFulfillmentStatus) }}
+            <StatusTag :label="detail.returnFulfillmentStatus" />
           </DescriptionsItem>
           <DescriptionsItem label="正向履约 ID">
             <CopyIdCell

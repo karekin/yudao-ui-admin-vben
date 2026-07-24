@@ -184,12 +184,9 @@ async function confirmSuspend() {
 
 <template>
   <Page auto-content-height>
-    <EvidenceAlert
-      message="CloudMold 规范 Listing 权威"
-      description="本页读取 CloudMold Listing 规范表，并支持上架审核/发布状态转换（提交/审核/发布/下架/暂停/归档，幂等命令 + 乐观版本）；Listing 管商品上架，Order 管交易，二者分离，不读取 yudao Mall Trade 业务表。"
-    />
+    <EvidenceAlert page="listing" />
 
-    <Grid table-title="规范 Listing">
+    <Grid table-title="渠道商品">
       <template #listing-no="{ row }">
         <CopyIdCell :value="row.listingNo" label="刊登单号" />
       </template>

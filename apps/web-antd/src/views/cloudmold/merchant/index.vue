@@ -172,14 +172,11 @@ function handleResumeShop(row: CloudMoldMerchantApi.Shop) {
 
 <template>
   <Page auto-content-height>
-    <EvidenceAlert
-      message="CloudMold 规范商家与渠道权威"
-      description="本页读取 CloudMold 商家账户与店铺规范表，并支持状态转换（激活/恢复，幂等命令 + 乐观版本）；不读取 yudao Member 账号或旧 member/merchant 业务表。System/Member 账号不等于 canonical Principal，商家(Merchant)不等于店铺(Shop)。"
-    />
+    <EvidenceAlert page="merchant" />
 
     <Tabs class="w-full">
       <Tabs.TabPane key="merchants" tab="商家">
-        <MerchantGrid table-title="规范商家">
+        <MerchantGrid table-title="商家">
           <template #merchant-code="{ row }">
             <CopyIdCell :value="row.merchantCode" label="商家编码" />
           </template>
@@ -209,7 +206,7 @@ function handleResumeShop(row: CloudMoldMerchantApi.Shop) {
       </Tabs.TabPane>
 
       <Tabs.TabPane key="shops" tab="店铺">
-        <ShopGrid table-title="规范店铺">
+        <ShopGrid table-title="店铺">
           <template #shop-id="{ row }">
             <CopyIdCell :value="row.shopId" label="规范店铺 ID" />
           </template>

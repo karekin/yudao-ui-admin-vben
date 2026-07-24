@@ -1,0 +1,40 @@
+.cloudmold-detail-drawer .ant-drawer-body {
+  padding: 16px;
+}
+
+.cloudmold-detail-drawer .ant-descriptions-header {
+  margin-bottom: 8px;
+}
+
+.cloudmold-detail-drawer .ant-descriptions-title {
+  font-size: 15px;
+}
+
+.cloudmold-detail-drawer .ant-descriptions-item-label {
+  width: 112px;
+  min-width: 112px;
+  white-space: nowrap;
+}
+
+.cloudmold-detail-drawer .ant-descriptions-item-content {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cloudmold-detail-drawer .ant-descriptions-item-content > * {
+  max-width: 100%;
+}
+
+.cloudmold-detail-drawer .ant-descriptions-row > td,
+.cloudmold-detail-drawer .ant-descriptions-row > th {
+  padding: 8px 12px !important;
+}
+
+.cloudmold-detail-drawer .ant-table-cell {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

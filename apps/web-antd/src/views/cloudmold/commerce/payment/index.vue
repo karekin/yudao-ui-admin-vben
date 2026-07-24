@@ -51,19 +51,9 @@ const [Grid] = useVbenVxeGrid({
 
 <template>
   <Page auto-content-height>
-    <EvidenceAlert
-      type="info"
-      message="CloudMold 规范 Payment 权威"
-      description="本页只读取 CloudMold Payment 规范表；资金事实与支付通道状态分离，不读取 yudao Mall Pay 业务表。"
-    />
+    <EvidenceAlert page="payment" />
 
-    <EvidenceAlert
-      type="warning"
-      message="当前支付首切片为 INTERNAL_TEST"
-      description="测试通道事实不能视为真实支付渠道已投产；接入真实 Provider 后仍需独立验收。"
-    />
-
-    <Grid table-title="规范 Payment">
+    <Grid table-title="支付记录">
       <template #payment-no="{ row }">
         <CopyIdCell :value="row.paymentNo" label="支付单号" />
       </template>
@@ -75,7 +65,7 @@ const [Grid] = useVbenVxeGrid({
       </template>
       <template #test-mode="{ row }">
         <Tag :color="row.testMode ? 'warning' : 'success'">
-          {{ row.testMode ? 'INTERNAL_TEST' : '真实通道' }}
+          {{ row.testMode ? '内部测试' : '真实通道' }}
         </Tag>
       </template>
       <template #action="{ row }">

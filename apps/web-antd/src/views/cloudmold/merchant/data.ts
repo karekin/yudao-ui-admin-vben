@@ -1,7 +1,12 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
-import { codeInput, statusInput, timeColumn } from '../shared/form-helpers';
+import {
+  codeInput,
+  statusSelect,
+  timeColumn,
+  withCloudMoldTableColumns,
+} from '../shared/form-helpers';
 
 /**
  * 商家账户状态（对齐后端 cloudmold_merchant_account.status 约束）。
@@ -51,7 +56,7 @@ export function useMerchantFormSchema(): VbenFormSchema[] {
   return [
     codeInput('merchantCode', '商家编码'),
     codeInput('legalName', '法人名称'),
-    statusInput(),
+    statusSelect('status', Object.keys(merchantStatusMeta)),
   ];
 }
 
@@ -59,12 +64,12 @@ export function useShopFormSchema(): VbenFormSchema[] {
   return [
     codeInput('merchantId', '商家 ID'),
     codeInput('channelCode', '渠道编码'),
-    statusInput(),
+    statusSelect('status', Object.keys(shopStatusMeta)),
   ];
 }
 
 export function useMerchantColumns(): VxeTableGridOptions['columns'] {
-  return [
+  return withCloudMoldTableColumns([
     {
       field: 'merchantCode',
       fixed: 'left',
@@ -90,11 +95,11 @@ export function useMerchantColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'merchant-action' },
       title: '操作',
     },
-  ];
+  ]);
 }
 
 export function useShopColumns(): VxeTableGridOptions['columns'] {
-  return [
+  return withCloudMoldTableColumns([
     {
       field: 'shopId',
       fixed: 'left',
@@ -121,5 +126,5 @@ export function useShopColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'shop-action' },
       title: '操作',
     },
-  ];
+  ]);
 }

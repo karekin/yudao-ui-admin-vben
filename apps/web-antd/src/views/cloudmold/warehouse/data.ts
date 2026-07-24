@@ -1,7 +1,13 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
-import { codeInput, statusInput, timeColumn } from '../shared/form-helpers';
+import {
+  codeInput,
+  enumColumn,
+  statusSelect,
+  timeColumn,
+  withCloudMoldTableColumns,
+} from '../shared/form-helpers';
 
 /**
  * 仓库 / 库区 / 库位状态（三者共用同一枚举，对齐后端 CHECK 约束）。
@@ -26,7 +32,7 @@ export function useWarehouseFormSchema(): VbenFormSchema[] {
   return [
     codeInput('warehouseCode', '仓库编码'),
     codeInput('warehouseType', '仓库类型'),
-    statusInput(),
+    statusSelect('status', Object.keys(warehouseStatusMeta)),
   ];
 }
 
@@ -34,7 +40,7 @@ export function useZoneFormSchema(): VbenFormSchema[] {
   return [
     codeInput('warehouseId', '仓库 ID'),
     codeInput('zoneCode', '库区编码'),
-    statusInput(),
+    statusSelect('status', Object.keys(warehouseStatusMeta)),
   ];
 }
 
@@ -43,12 +49,12 @@ export function useLocationFormSchema(): VbenFormSchema[] {
     codeInput('warehouseId', '仓库 ID'),
     codeInput('zoneId', '库区 ID'),
     codeInput('locationCode', '库位编码'),
-    statusInput(),
+    statusSelect('status', Object.keys(warehouseStatusMeta)),
   ];
 }
 
 export function useWarehouseColumns(): VxeTableGridOptions['columns'] {
-  return [
+  return withCloudMoldTableColumns([
     {
       field: 'warehouseCode',
       fixed: 'left',
@@ -57,7 +63,7 @@ export function useWarehouseColumns(): VxeTableGridOptions['columns'] {
       title: '仓库编码',
     },
     { field: 'name', minWidth: 180, title: '仓库名称' },
-    { field: 'warehouseType', minWidth: 130, title: '类型' },
+    enumColumn('warehouseType', '仓库类型', 130),
     { field: 'timezone', minWidth: 150, title: '时区' },
     {
       field: 'status',
@@ -75,11 +81,11 @@ export function useWarehouseColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'warehouse-action' },
       title: '操作',
     },
-  ];
+  ]);
 }
 
 export function useZoneColumns(): VxeTableGridOptions['columns'] {
-  return [
+  return withCloudMoldTableColumns([
     {
       field: 'zoneCode',
       fixed: 'left',
@@ -89,7 +95,7 @@ export function useZoneColumns(): VxeTableGridOptions['columns'] {
     },
     { field: 'warehouseCode', minWidth: 150, title: '仓库编码' },
     { field: 'name', minWidth: 160, title: '库区名称' },
-    { field: 'zoneType', minWidth: 120, title: '类型' },
+    enumColumn('zoneType', '库区类型', 120),
     {
       field: 'status',
       minWidth: 110,
@@ -107,11 +113,11 @@ export function useZoneColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'zone-action' },
       title: '操作',
     },
-  ];
+  ]);
 }
 
 export function useLocationColumns(): VxeTableGridOptions['columns'] {
-  return [
+  return withCloudMoldTableColumns([
     {
       field: 'locationCode',
       fixed: 'left',
@@ -122,7 +128,7 @@ export function useLocationColumns(): VxeTableGridOptions['columns'] {
     { field: 'warehouseCode', minWidth: 140, title: '仓库编码' },
     { field: 'zoneCode', minWidth: 120, title: '库区编码' },
     { field: 'name', minWidth: 150, title: '库位名称' },
-    { field: 'locationType', minWidth: 110, title: '类型' },
+    enumColumn('locationType', '库位类型', 110),
     { field: 'aisleCode', minWidth: 100, title: '巷道' },
     { field: 'rackCode', minWidth: 100, title: '货架' },
     { field: 'bayCode', minWidth: 100, title: '贝位' },
@@ -133,7 +139,7 @@ export function useLocationColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'quantity' },
       title: '容量',
     },
-    { field: 'capacityUomCode', minWidth: 90, title: '容量 UOM' },
+    enumColumn('capacityUomCode', '容量单位', 100),
     {
       field: 'status',
       minWidth: 110,
@@ -150,5 +156,5 @@ export function useLocationColumns(): VxeTableGridOptions['columns'] {
       slots: { default: 'location-action' },
       title: '操作',
     },
-  ];
+  ]);
 }

@@ -1,7 +1,12 @@
 import type { VbenFormSchema } from '#/adapter/form';
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 
-import { codeInput, statusInput, timeColumn } from '../shared/form-helpers';
+import {
+  codeInput,
+  statusSelect,
+  timeColumn,
+  withCloudMoldTableColumns,
+} from '../shared/form-helpers';
 
 /**
  * 身份主体类型（对齐后端 principal.principal_type 约束）。
@@ -44,7 +49,22 @@ export const operationStatusMeta: Record<
 };
 
 export function usePrincipalFormSchema(): VbenFormSchema[] {
-  return [codeInput('principalType', '主体类型'), statusInput()];
+  return [
+    {
+      component: 'Select',
+      componentProps: {
+        allowClear: true,
+        options: Object.entries(principalTypeMeta).map(([value, meta]) => ({
+          label: meta.label,
+          value,
+        })),
+        placeholder: '全部主体类型',
+      },
+      fieldName: 'principalType',
+      label: '主体类型',
+    },
+    statusSelect('status', Object.keys(principalStatusMeta)),
+  ];
 }
 
 export function useSourceFormSchema(): VbenFormSchema[] {
@@ -52,7 +72,7 @@ export function useSourceFormSchema(): VbenFormSchema[] {
     codeInput('principalId', '身份主体 ID'),
     codeInput('sourceSystem', '来源系统'),
     codeInput('sourceType', '来源类型'),
-    statusInput(),
+    statusSelect('status', Object.keys(sourceStatusMeta)),
   ];
 }
 
@@ -76,7 +96,7 @@ export function useOperationFormSchema(): VbenFormSchema[] {
 }
 
 export function usePrincipalColumns(): VxeTableGridOptions['columns'] {
-  return [
+  return withCloudMoldTableColumns([
     {
       field: 'principalId',
       fixed: 'left',
@@ -100,11 +120,11 @@ export function usePrincipalColumns(): VxeTableGridOptions['columns'] {
     { field: 'version', minWidth: 80, title: '版本' },
     timeColumn('createdAt', '创建时间'),
     timeColumn('updatedAt', '更新时间'),
-  ];
+  ]);
 }
 
 export function useSourceColumns(): VxeTableGridOptions['columns'] {
-  return [
+  return withCloudMoldTableColumns([
     {
       field: 'sourceIdentityId',
       fixed: 'left',
@@ -127,11 +147,11 @@ export function useSourceColumns(): VxeTableGridOptions['columns'] {
     timeColumn('validTo', '生效结束'),
     { field: 'version', minWidth: 80, title: '版本' },
     timeColumn('updatedAt', '更新时间'),
-  ];
+  ]);
 }
 
 export function useOperationColumns(): VxeTableGridOptions['columns'] {
-  return [
+  return withCloudMoldTableColumns([
     { field: 'operationId', fixed: 'left', minWidth: 110, title: '操作 ID' },
     {
       field: 'idempotencyKey',
@@ -149,5 +169,5 @@ export function useOperationColumns(): VxeTableGridOptions['columns'] {
     { field: 'principalId', minWidth: 220, title: '身份主体 ID' },
     timeColumn('createdAt', '创建时间'),
     timeColumn('updatedAt', '更新时间'),
-  ];
+  ]);
 }

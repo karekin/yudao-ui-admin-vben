@@ -45,11 +45,7 @@ onMounted(loadOverview);
 
 <template>
   <Page auto-content-height>
-    <EvidenceAlert
-      type="warning"
-      message="证据状态按来源独立判定"
-      description="Outbox 为当前租户实时聚合；CDC、DQC、ADS 和来源准入在外部观察器接入前明确显示 UNKNOWN / NOT_CONNECTED。零失败或零积压本身不代表链路健康。"
-    />
+    <EvidenceAlert page="dataReadiness" type="warning" />
 
     <div class="mb-4 flex items-center justify-between">
       <span class="text-muted-foreground">

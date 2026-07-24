@@ -17,8 +17,11 @@ import {
 import { getCloudMoldOrderDetail } from '#/api/cloudmold/commerce';
 
 import CopyIdCell from '../../shared/copy-id-cell.vue';
+import { cloudMoldEnumLabel } from '../../shared/status-meta';
 import StatusTag from '../../shared/status-tag.vue';
 import { commerceStatusColor } from '../status';
+
+import '../../shared/detail-layout.css';
 
 defineOptions({ name: 'CloudMoldCommerceOrderDetailDrawer' });
 
@@ -109,17 +112,18 @@ watch(
 <template>
   <Drawer
     v-model:open="openProxy"
-    title="规范订单详情"
+    class="cloudmold-detail-drawer"
+    title="订单详情"
     placement="right"
-    width="780"
+    width="min(920px, calc(100vw - 24px))"
     :destroy-on-close="true"
   >
     <Spin :spinning="loading">
       <Result
         v-if="!loading && !detail"
         status="info"
-        title="未找到权威数据"
-        sub-title="该订单不存在、不属于当前租户或暂无 CloudMold 权威数据。"
+        title="未找到订单"
+        sub-title="该订单不存在，或当前账号没有查看权限。"
       />
       <template v-else-if="detail">
         <Descriptions
@@ -190,13 +194,13 @@ watch(
             <CopyIdCell :value="detail.paymentId" label="支付 ID" />
           </DescriptionsItem>
           <DescriptionsItem label="支付状态">
-            {{ dash(detail.paymentStatus) }}
+            <StatusTag :label="detail.paymentStatus" />
           </DescriptionsItem>
           <DescriptionsItem label="履约 ID">
             <CopyIdCell :value="detail.fulfillmentId" label="履约 ID" />
           </DescriptionsItem>
           <DescriptionsItem label="履约状态">
-            {{ dash(detail.fulfillmentStatus) }}
+            <StatusTag :label="detail.fulfillmentStatus" />
           </DescriptionsItem>
           <DescriptionsItem label="发运 ID">
             <CopyIdCell :value="detail.shipmentId" label="发运 ID" />
@@ -208,7 +212,7 @@ watch(
             <CopyIdCell :value="detail.cancellationSagaId" label="取消 Saga" />
           </DescriptionsItem>
           <DescriptionsItem label="取消前状态">
-            {{ dash(detail.preCancellationStatus) }}
+            {{ cloudMoldEnumLabel(detail.preCancellationStatus) }}
           </DescriptionsItem>
           <DescriptionsItem label="取消责任方">
             {{ dash(detail.cancellationResponsibilityParty) }}
