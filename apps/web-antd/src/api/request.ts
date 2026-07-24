@@ -197,10 +197,21 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       // 这里可以根据业务进行定制,你可以拿到 error 内的信息进行定制化处理，根据不同的 code 做不同的提示，而不是直接使用 message.error 提示 msg
       // 当前mock接口返回的错误字段是 error 或者 message
       const responseData = error?.response?.data ?? {};
+      const optionalFeature =
+        error?.config?.headers?.get?.('X-CloudMold-Optional-Feature') ??
+        error?.config?.headers?.['X-CloudMold-Optional-Feature'];
       const errorMessage =
         responseData?.error ?? responseData?.message ?? responseData.msg ?? '';
       // add by 芋艿：特殊：避免 401 “账号未登录”，重复提示。因为，此时会跳转到登录界面，只需提示一次！！！
       if (error?.data?.code === 401) {
+        return;
+      }
+      // Agent Control 在 P0 激活评审前默认不注册 Controller。前端会把预期的 404
+      // 渲染为“能力未启用”，无需再弹出全局请求错误。
+      if (
+        optionalFeature === 'agent-control' &&
+        (error?.data?.code === 404 || responseData?.code === 404)
+      ) {
         return;
       }
       // 如果没有错误信息，则会根据状态码进行提示

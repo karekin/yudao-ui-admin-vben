@@ -19,12 +19,17 @@ import {
   Typography,
 } from 'ant-design-vue';
 
-import { getCloudMoldAgentBusinessCards } from '#/api/cloudmold/agent-control';
+import {
+  getCloudMoldAgentBusinessCards,
+  isAgentControlUnavailable,
+} from '#/api/cloudmold/agent-control';
 
 defineOptions({ name: 'CloudMoldAgentControl' });
 
 const cards = ref<CloudMoldAgentControlApi.BusinessCard[]>([]);
 const loading = ref(false);
+const loadFailed = ref(false);
+const serviceUnavailable = ref(false);
 const roleCode = ref<string>();
 const cardType = ref<CloudMoldAgentControlApi.CardType>();
 
@@ -98,6 +103,12 @@ async function loadCards() {
       limit: 100,
       roleCode: roleCode.value,
     });
+    loadFailed.value = false;
+    serviceUnavailable.value = false;
+  } catch (error) {
+    cards.value = [];
+    serviceUnavailable.value = isAgentControlUnavailable(error);
+    loadFailed.value = !serviceUnavailable.value;
   } finally {
     loading.value = false;
   }
@@ -119,7 +130,24 @@ onMounted(loadCards);
       description="当前首条闭环覆盖库控、买手和客服。生产采购仍受独立审批与预算门禁约束。"
     />
 
-    <Card class="mb-4" :bordered="false">
+    <Alert
+      v-if="serviceUnavailable"
+      class="mb-4"
+      type="warning"
+      show-icon
+      message="Agent Control 当前未启用"
+      description="该能力在 P0 激活评审前保持默认关闭；完成真实审批、DeerFlow E2E 与湖仓终态验收后再启用。"
+    />
+    <Alert
+      v-else-if="loadFailed"
+      class="mb-4"
+      type="error"
+      show-icon
+      message="岗位进展加载失败"
+      description="请检查后端服务与网络状态后重试。"
+    />
+
+    <Card v-if="!serviceUnavailable" class="mb-4" :bordered="false">
       <Space wrap>
         <Select
           v-model:value="roleCode"
@@ -141,7 +169,7 @@ onMounted(loadCards);
       </Space>
     </Card>
 
-    <Spin :spinning="loading">
+    <Spin v-if="!serviceUnavailable" :spinning="loading">
       <Empty v-if="!cards.length" description="当前没有符合条件的岗位事项" />
       <Row v-else :gutter="[16, 16]">
         <Col v-for="item in cards" :key="item.cardId" :xs="24" :lg="12" :xl="8">

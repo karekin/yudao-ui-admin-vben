@@ -1,5 +1,9 @@
 import { requestClient } from '#/api/request';
 
+const OPTIONAL_FEATURE_HEADERS = {
+  'X-CloudMold-Optional-Feature': 'agent-control',
+};
+
 export namespace CloudMoldAgentControlApi {
   export type CardType = 'APPROVAL' | 'HANDOFF' | 'RESULT';
 
@@ -53,7 +57,7 @@ export function getCloudMoldAgentBusinessCards(
 ) {
   return requestClient.get<CloudMoldAgentControlApi.BusinessCard[]>(
     '/cloudmold/agent-control/business-cards',
-    { params },
+    { headers: OPTIONAL_FEATURE_HEADERS, params },
   );
 }
 
@@ -63,6 +67,23 @@ export function getCloudMoldAgentRoleGrants(
 ) {
   return requestClient.get<CloudMoldAgentControlApi.ActorRoleGrantView[]>(
     '/cloudmold/agent-control/governance/authorities/grants',
-    { params },
+    { headers: OPTIONAL_FEATURE_HEADERS, params },
+  );
+}
+
+export function isAgentControlUnavailable(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const candidate = error as {
+    code?: number;
+    data?: { code?: number };
+    response?: { data?: { code?: number }; status?: number };
+  };
+  return (
+    candidate.code === 404 ||
+    candidate.data?.code === 404 ||
+    candidate.response?.data?.code === 404 ||
+    candidate.response?.status === 404
   );
 }

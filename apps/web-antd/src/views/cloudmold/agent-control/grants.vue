@@ -8,6 +8,7 @@ import { onMounted, reactive, ref } from 'vue';
 import { Page } from '@vben/common-ui';
 
 import {
+  Alert,
   Button,
   DatePicker,
   Form,
@@ -22,7 +23,10 @@ import {
 } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
-import { getCloudMoldAgentRoleGrants } from '#/api/cloudmold/agent-control';
+import {
+  getCloudMoldAgentRoleGrants,
+  isAgentControlUnavailable,
+} from '#/api/cloudmold/agent-control';
 import { grantRole, revokeRole } from '#/api/cloudmold/agent-control/command';
 
 import CopyIdCell from '../shared/copy-id-cell.vue';
@@ -61,6 +65,7 @@ const roleName: Record<string, string> = Object.fromEntries(
 
 const dataSource = ref<Grant[]>([]);
 const loading = ref(false);
+const serviceUnavailable = ref(false);
 const filterRole = ref<string | undefined>(undefined);
 const filterStatus = ref<string | undefined>(undefined);
 
@@ -92,10 +97,15 @@ async function loadGrants() {
       roleCode: filterRole.value,
       status: filterStatus.value,
     });
+    serviceUnavailable.value = false;
   } catch (error) {
-    message.error(
-      `加载失败：${error instanceof Error ? error.message : '请稍后重试'}`,
-    );
+    dataSource.value = [];
+    serviceUnavailable.value = isAgentControlUnavailable(error);
+    if (!serviceUnavailable.value) {
+      message.error(
+        `加载失败：${error instanceof Error ? error.message : '请稍后重试'}`,
+      );
+    }
   } finally {
     loading.value = false;
   }
@@ -224,12 +234,22 @@ function formatTime(value?: string) {
       description="本页治理 Agent 岗位角色授予（授予/撤销，幂等命令 + 乐观版本）；actorUserId 为 yudao 用户 ID，roleCode 为 CloudMold 规范岗位。后端校验：治理者不能给自己授/撤、角色须 ACTIVE、有效期合法。"
     />
 
+    <Alert
+      v-if="serviceUnavailable"
+      class="mb-4"
+      type="warning"
+      show-icon
+      message="Agent Control 治理能力当前未启用"
+      description="岗位授予与撤销在 P0 激活评审前保持默认关闭；当前页面仅保留治理边界说明。"
+    />
+
     <Space class="mb-4" wrap>
       <Select
         v-model:value="filterRole"
         allow-clear
         class="w-40"
         :options="roleOptions"
+        :disabled="serviceUnavailable"
         placeholder="按岗位筛选"
         @change="loadGrants"
       />
@@ -237,6 +257,7 @@ function formatTime(value?: string) {
         v-model:value="filterStatus"
         allow-clear
         class="w-40"
+        :disabled="serviceUnavailable"
         placeholder="按状态筛选"
         :options="[
           { label: '生效', value: GrantStatus.ACTIVE },
@@ -245,8 +266,16 @@ function formatTime(value?: string) {
         ]"
         @change="loadGrants"
       />
-      <Button :loading="loading" @click="loadGrants">刷新</Button>
-      <Button type="primary" @click="openGrant">授予岗位</Button>
+      <Button
+        :disabled="serviceUnavailable"
+        :loading="loading"
+        @click="loadGrants"
+      >
+        刷新
+      </Button>
+      <Button :disabled="serviceUnavailable" type="primary" @click="openGrant">
+        授予岗位
+      </Button>
     </Space>
 
     <Table
