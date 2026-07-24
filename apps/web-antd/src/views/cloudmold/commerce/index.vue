@@ -20,31 +20,31 @@ const sections = [
   {
     desc: '规范 Listing、报价与渠道发布资格',
     key: 'listing',
-    path: '/cloudmold/listing',
+    path: '/cloudmold/product-center/channel-products',
     title: '渠道刊登',
   },
   {
     desc: '规范 Order 及与支付、履约、售后的跨域关联',
     key: 'order',
-    path: '/cloudmold/order',
+    path: '/cloudmold/order-fulfillment/orders',
     title: '订单',
   },
   {
     desc: '规范 Payment（当前为 INTERNAL_TEST 首切片）',
     key: 'payment',
-    path: '/cloudmold/payment',
+    path: '/cloudmold/order-fulfillment/payments',
     title: '支付',
   },
   {
     desc: '规范 Fulfillment 与首切片发运事实',
     key: 'fulfillment',
-    path: '/cloudmold/fulfillment',
+    path: '/cloudmold/order-fulfillment/fulfillments',
     title: '履约',
   },
   {
     desc: '规范 AfterSale、退货与退款',
     key: 'aftersale',
-    path: '/cloudmold/aftersale',
+    path: '/cloudmold/order-fulfillment/aftersales',
     title: '售后',
   },
 ] as const;

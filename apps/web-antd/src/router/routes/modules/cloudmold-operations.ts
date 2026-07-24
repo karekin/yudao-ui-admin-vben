@@ -1,10 +1,10 @@
 import type { RouteRecordRaw } from 'vue-router';
 
 /**
- * CloudMold 横向运营域只读路由（L3）。
+ * CloudMold 横向运营域只读诊断路由（L3）。
  *
- * 独立于 cloudmold.ts：后者承载 R3 未提交的 agent-control 路由，
- * 本文件隔离 L3 新增领域，避免污染 R3 工作区；R3 提交后再统一。
+ * 这些页面暂不进入日常业务菜单；它们保留稳定的直接访问地址，等待各域
+ * 达到业务入口准入门槛后再迁入 cloudmold.ts 的运营中心。
  */
 const routes: RouteRecordRaw[] = [
   {
