@@ -73,24 +73,32 @@ interface SupplyCommandForm {
   issueType?: string;
   inboundQuantity?: number;
   lowerQuantity?: number;
+  mappingEvidenceSha256?: string;
   minimumOrderQuantity?: number;
   modelRef?: string;
   planCode?: string;
   policyCode?: string;
   policySha256?: string;
   principalId?: string;
+  accountId?: number;
+  erpProductId?: number;
+  erpProductUnitId?: number;
   resolutionCode?: string;
   severity?: string;
   safetyStockQuantity?: number;
   scenarioCode?: string;
   sourceBalanceId?: string;
+  sourceWarehouseId?: number;
+  supplierId?: number;
   targetServiceLevelBasisPoints?: number;
-  targetReference?: string;
   targetType?: string;
+  targetWarehouseId?: number;
+  taxPercent?: number;
   uomCode?: string;
   unitCostMinor?: number;
   upperQuantity?: number;
   warehouseId?: string;
+  wmsSkuId?: number;
   onHandQuantity?: number;
 }
 
@@ -273,6 +281,71 @@ const commandTitles: Record<string, string> = {
   SELECT_PLAN_SCENARIO: '选定计划情景',
 };
 
+const purchaseTargetType = 'PURCHASE_REQUEST' as const;
+const transferTargetType = 'TRANSFER_REQUEST' as const;
+const conversionTargetOptions = [
+  {
+    label: 'ERP 采购单 PREPARE',
+    value: purchaseTargetType,
+  },
+  {
+    label: 'WMS 调拨单 PREPARE',
+    value: transferTargetType,
+  },
+] satisfies Array<{
+  label: string;
+  value: CloudMoldSupplyPlanningApi.ReplenishmentConversionTargetType;
+}>;
+
+function getCommandDescription(mode: string) {
+  if (mode === 'CONVERT_REPLENISHMENT') {
+    return '只会创建 ERP/WMS 的 PREPARE 草稿单，并保留映射证据；不会自动审批、下达或完结下游单据。';
+  }
+  return '请确认业务对象和输入参数。提交后将进入可审计状态流转，并自动刷新控制塔。';
+}
+
+function isSha256(value?: string) {
+  return Boolean(value) && /^[0-9a-f]{64}$/u.test(value ?? '');
+}
+
+function requireText(value: string | undefined, label: string) {
+  if (!value?.trim()) {
+    throw new Error(`${label}不能为空`);
+  }
+  return value.trim();
+}
+
+function requirePositiveInteger(value: number | undefined, label: string) {
+  if (!Number.isInteger(value) || Number(value) <= 0) {
+    throw new Error(`${label}必须为正整数`);
+  }
+  return Number(value);
+}
+
+function requireNonNegativeNumber(value: number | undefined, label: string) {
+  if (value === undefined || Number.isNaN(Number(value)) || Number(value) < 0) {
+    throw new Error(`${label}必须大于或等于 0`);
+  }
+  return Number(value);
+}
+
+function requirePercent(value: number | undefined, label: string) {
+  const normalized = requireNonNegativeNumber(value, label);
+  if (normalized > 100) {
+    throw new Error(`${label}必须在 0 到 100 之间`);
+  }
+  return normalized;
+}
+
+function requireTargetType(
+  value: string | undefined,
+): CloudMoldSupplyPlanningApi.ReplenishmentConversionTargetType {
+  if (value === purchaseTargetType || value === transferTargetType) {
+    return value;
+  }
+  throw new Error('请选择下游 PREPARE 草稿类型');
+}
+
 async function loadData() {
   loading.value = true;
   loadError.value = '';
@@ -320,6 +393,13 @@ function openCommand(mode: string, row?: Record<string, unknown>) {
         expectedVersion: Number(row.aggregateVersion),
       }
     : {};
+  if (mode === 'CONVERT_REPLENISHMENT') {
+    commandForm.value = {
+      ...commandForm.value,
+      targetType: commandForm.value.targetType ?? purchaseTargetType,
+      taxPercent: commandForm.value.taxPercent ?? 13,
+    };
+  }
   if (!row && mode === 'RUN_INVENTORY_HEALTH_SCAN') {
     commandForm.value = {
       agedThresholdDays: 90,
@@ -475,14 +555,68 @@ function buildCommand() {
     };
   }
   if (commandMode.value === 'CONVERT_REPLENISHMENT') {
+    const targetType = requireTargetType(values.targetType);
+    const baseConversion = {
+      convertedByPrincipalId: requireText(values.principalId, '操作人 ID'),
+      expectedVersion,
+      mappingEvidenceSha256: isSha256(values.mappingEvidenceSha256)
+        ? values.mappingEvidenceSha256!
+        : (() => {
+            throw new Error('映射证据 SHA-256 必须为 64 位小写十六进制');
+          })(),
+      recommendationId: aggregateId,
+      targetType,
+    };
+    if (targetType === purchaseTargetType) {
+      return {
+        operation: commandMode.value,
+        replenishmentConversion: {
+          ...baseConversion,
+          accountId: requirePositiveInteger(
+            values.accountId,
+            'ERP 结算账户 ID',
+          ),
+          erpProductId: requirePositiveInteger(
+            values.erpProductId,
+            'ERP 商品 ID',
+          ),
+          erpProductUnitId: requirePositiveInteger(
+            values.erpProductUnitId,
+            'ERP 商品单位 ID',
+          ),
+          supplierId: requirePositiveInteger(values.supplierId, '供应商 ID'),
+          targetType,
+          taxPercent: requirePercent(values.taxPercent, '税率'),
+          unitCostMinor: requireNonNegativeNumber(
+            values.unitCostMinor,
+            '采购单价(分)',
+          ),
+        },
+      };
+    }
+    const sourceWarehouseId = requirePositiveInteger(
+      values.sourceWarehouseId,
+      '来源仓库 ID',
+    );
+    const targetWarehouseId = requirePositiveInteger(
+      values.targetWarehouseId,
+      '目标仓库 ID',
+    );
+    if (sourceWarehouseId === targetWarehouseId) {
+      throw new Error('来源仓库与目标仓库不能相同');
+    }
     return {
       operation: commandMode.value,
       replenishmentConversion: {
-        convertedByPrincipalId: values.principalId,
-        expectedVersion,
-        recommendationId: aggregateId,
-        targetReference: values.targetReference || undefined,
-        targetType: values.targetType,
+        ...baseConversion,
+        sourceWarehouseId,
+        targetType,
+        targetWarehouseId,
+        unitCostMinor: requireNonNegativeNumber(
+          values.unitCostMinor,
+          '调拨单价(分)',
+        ),
+        wmsSkuId: requirePositiveInteger(values.wmsSkuId, 'WMS SKU ID'),
       },
     };
   }
@@ -814,7 +948,6 @@ onMounted(loadData);
                   v-if="
                     [
                       'COMPLETED',
-                      'CONVERTED',
                       'PUBLISHED',
                       'REJECTED',
                       'RELEASED',
@@ -824,6 +957,15 @@ onMounted(loadData);
                   class="action-complete"
                 >
                   当前流程已完成
+                </span>
+                <span
+                  v-if="
+                    record.itemType === 'REPLENISHMENT' &&
+                    record.status === 'CONVERTED'
+                  "
+                  class="action-complete"
+                >
+                  已创建 PREPARE 草稿，待下游审批 / 执行
                 </span>
               </Space>
             </template>
@@ -964,7 +1106,7 @@ onMounted(loadData);
           show-icon
           type="info"
           :message="commandTitles[commandMode] ?? commandMode"
-          description="请确认业务对象和输入参数。提交后将进入可审计状态流转，并自动刷新控制塔。"
+          :description="getCommandDescription(commandMode)"
         />
         <Form :label-col="{ span: 7 }" :wrapper-col="{ span: 16 }">
           <template v-if="commandMode === 'CREATE_FORECAST'">
@@ -1240,21 +1382,117 @@ onMounted(loadData);
             >
               <Select
                 v-model:value="commandForm.targetType"
-                :options="
-                  ['PURCHASE_REQUEST', 'TRANSFER_REQUEST'].map((value) => ({
-                    label: value,
-                    value,
-                  }))
-                "
+                :options="conversionTargetOptions"
               />
             </FormItem>
             <FormItem
               v-if="commandMode === 'CONVERT_REPLENISHMENT'"
-              label="目标引用"
+              label="映射证据 SHA-256"
+              required
             >
               <Input
-                v-model:value="commandForm.targetReference"
-                placeholder="留空则自动生成受控请求引用"
+                v-model:value="commandForm.mappingEvidenceSha256"
+                placeholder="64 位小写十六进制"
+              />
+            </FormItem>
+            <FormItem
+              v-if="commandMode === 'CONVERT_REPLENISHMENT'"
+              label="采购 / 调拨单价(分)"
+              required
+            >
+              <InputNumber
+                v-model:value="commandForm.unitCostMinor"
+                :min="0"
+                class="w-full"
+              />
+            </FormItem>
+            <template
+              v-if="
+                commandMode === 'CONVERT_REPLENISHMENT' &&
+                commandForm.targetType === purchaseTargetType
+              "
+            >
+              <FormItem label="供应商 ID" required>
+                <InputNumber
+                  v-model:value="commandForm.supplierId"
+                  :min="1"
+                  class="w-full"
+                />
+              </FormItem>
+              <FormItem label="ERP 结算账户 ID" required>
+                <InputNumber
+                  v-model:value="commandForm.accountId"
+                  :min="1"
+                  class="w-full"
+                />
+              </FormItem>
+              <FormItem label="ERP 商品 ID" required>
+                <InputNumber
+                  v-model:value="commandForm.erpProductId"
+                  :min="1"
+                  class="w-full"
+                />
+              </FormItem>
+              <FormItem label="ERP 商品单位 ID" required>
+                <InputNumber
+                  v-model:value="commandForm.erpProductUnitId"
+                  :min="1"
+                  class="w-full"
+                />
+              </FormItem>
+              <FormItem label="税率 (%)" required>
+                <InputNumber
+                  v-model:value="commandForm.taxPercent"
+                  :max="100"
+                  :min="0"
+                  class="w-full"
+                />
+              </FormItem>
+            </template>
+            <template
+              v-if="
+                commandMode === 'CONVERT_REPLENISHMENT' &&
+                commandForm.targetType === transferTargetType
+              "
+            >
+              <FormItem label="来源仓库 ID" required>
+                <InputNumber
+                  v-model:value="commandForm.sourceWarehouseId"
+                  :min="1"
+                  class="w-full"
+                />
+              </FormItem>
+              <FormItem label="目标仓库 ID" required>
+                <InputNumber
+                  v-model:value="commandForm.targetWarehouseId"
+                  :min="1"
+                  class="w-full"
+                />
+              </FormItem>
+              <FormItem label="WMS SKU ID" required>
+                <InputNumber
+                  v-model:value="commandForm.wmsSkuId"
+                  :min="1"
+                  class="w-full"
+                />
+              </FormItem>
+            </template>
+            <FormItem
+              v-if="commandMode === 'CONVERT_REPLENISHMENT'"
+              label="下游门禁说明"
+            >
+              <Input
+                disabled
+                value="只创建 PREPARE 草稿，后续审批与执行必须在 ERP/WMS 内继续完成"
+              />
+            </FormItem>
+            <FormItem
+              v-if="commandMode === 'CONVERT_REPLENISHMENT'"
+              label="执行结果"
+            >
+              <Input
+                disabled
+                value="后端会回填真实 targetReference，前端不再伪造引用"
               />
             </FormItem>
             <FormItem

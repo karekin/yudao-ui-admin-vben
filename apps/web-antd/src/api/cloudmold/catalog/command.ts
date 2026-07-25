@@ -22,6 +22,13 @@ export const CatalogLifecycleAction = {
 } as const;
 
 export namespace CloudMoldCatalogCommandApi {
+  export interface CommandEnvelopeOverride {
+    causationId?: string;
+    correlationId?: string;
+    idempotencyKey?: string;
+    occurredAt?: string;
+  }
+
   export interface DefineSkuCommand {
     barcode: string;
     barcodeType: string;
@@ -81,6 +88,63 @@ export namespace CloudMoldCatalogCommandApi {
     operationId: number;
     previousStatus: string;
   }
+
+  export interface MetadataUpdateResult {
+    aggregateVersion: number;
+    businessCode: string;
+    currentStatus: string;
+    duplicate: boolean;
+    entityId: string;
+    entityType: string;
+    operationId: number;
+  }
+
+  export interface BarcodeRotateResult {
+    aggregateVersion: number;
+    barcodeType: string;
+    currentBarcode: string;
+    currentBarcodeId: string;
+    duplicate: boolean;
+    operationId: number;
+    previousBarcode: string;
+    previousBarcodeId: string;
+    skuId: string;
+  }
+
+  export interface MetadataUpdateCommand extends CommandEnvelopeOverride {
+    brandRef?: string;
+    entityId: string;
+    entityType: 'SKU' | 'SPU' | 'STYLE';
+    expectedVersion: number;
+    planningCategoryRef?: string;
+    planningYear?: number;
+    productName?: string;
+    reason: string;
+    salesCategoryRef?: string;
+    seasonCode?: string;
+    skuCode?: string;
+    spuCode?: string;
+    styleCode?: string;
+    styleName?: string;
+    waveCode?: string;
+  }
+
+  export interface BarcodeRotateCommand extends CommandEnvelopeOverride {
+    barcode: string;
+    barcodeType: string;
+    expectedVersion: number;
+    reason: string;
+    skuId: string;
+  }
+}
+
+function buildCatalogCommandEnvelope(
+  override: CloudMoldCatalogCommandApi.CommandEnvelopeOverride = {},
+) {
+  return {
+    ...buildCommandEnvelope(),
+    ...override,
+  };
 }
 
 export function defineCatalogSku(
@@ -106,12 +170,76 @@ export function changeCatalogLifecycle(
   return requestClient.post<CloudMoldCatalogCommandApi.LifecycleResult>(
     '/cloudmold/catalog/lifecycle',
     {
-      ...buildCommandEnvelope(),
+      ...buildCatalogCommandEnvelope(),
       action,
       entityId,
       entityType,
       expectedVersion,
       reason,
+    },
+  );
+}
+
+/**
+ * 更新 SKU 自有编码。
+ *
+ * Style/SPU 的可写字段尚未由详情查询完整返回，前端在查询契约补齐前不开放，
+ * 避免用空值覆盖规范元数据。
+ */
+export function updateCatalogSkuCode(
+  skuId: string,
+  expectedVersion: number,
+  skuCode: string,
+  reason: string,
+  override: CloudMoldCatalogCommandApi.CommandEnvelopeOverride = {},
+) {
+  return updateCatalogMetadata({
+    ...override,
+    entityId: skuId,
+    entityType: CatalogEntityType.SKU,
+    expectedVersion,
+    reason,
+    skuCode,
+  });
+}
+
+export function updateCatalogMetadata(
+  payload: CloudMoldCatalogCommandApi.MetadataUpdateCommand,
+) {
+  return requestClient.post<CloudMoldCatalogCommandApi.MetadataUpdateResult>(
+    '/cloudmold/catalog/metadata/update',
+    {
+      ...buildCatalogCommandEnvelope(payload),
+      ...payload,
+    },
+  );
+}
+
+/** 轮换当前主条码；后端原子保留历史条码并推进 SKU 聚合版本。 */
+export function rotateCatalogBarcode(
+  skuIdOrPayload: CloudMoldCatalogCommandApi.BarcodeRotateCommand | string,
+  expectedVersion?: number,
+  barcode?: string,
+  barcodeType?: string,
+  reason?: string,
+  override: CloudMoldCatalogCommandApi.CommandEnvelopeOverride = {},
+) {
+  const payload =
+    typeof skuIdOrPayload === 'string'
+      ? {
+          ...override,
+          barcode,
+          barcodeType,
+          expectedVersion,
+          reason,
+          skuId: skuIdOrPayload,
+        }
+      : skuIdOrPayload;
+  return requestClient.post<CloudMoldCatalogCommandApi.BarcodeRotateResult>(
+    '/cloudmold/catalog/barcode/rotate',
+    {
+      ...buildCatalogCommandEnvelope(payload),
+      ...payload,
     },
   );
 }

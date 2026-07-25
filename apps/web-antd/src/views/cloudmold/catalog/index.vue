@@ -23,8 +23,10 @@ import {
 import CopyIdCell from '../shared/copy-id-cell.vue';
 import EvidenceAlert from '../shared/evidence-alert.vue';
 import StatusTag from '../shared/status-tag.vue';
+import BarcodeRotateForm from './barcode-rotate-form.vue';
 import { catalogStatusMeta, useGridColumns, useGridFormSchema } from './data';
 import DetailDrawer from './detail-drawer.vue';
+import SkuCodeForm from './sku-code-form.vue';
 import SkuForm from './sku-form.vue';
 
 defineOptions({ name: 'CloudMoldCatalog' });
@@ -35,10 +37,54 @@ const [SkuModal, skuModalApi] = useVbenModal({
   connectedComponent: SkuForm,
   destroyOnClose: true,
 });
+const [SkuCodeModal, skuCodeModalApi] = useVbenModal({
+  connectedComponent: SkuCodeForm,
+  destroyOnClose: true,
+});
+const [BarcodeRotateModal, barcodeRotateModalApi] = useVbenModal({
+  connectedComponent: BarcodeRotateForm,
+  destroyOnClose: true,
+});
 
 function openDetail(skuId: string) {
   detailSkuId.value = skuId;
   detailOpen.value = true;
+}
+
+async function openSkuCodeUpdate(row: CloudMoldCatalogApi.Sku) {
+  const hide = message.loading({
+    content: '正在加载 SKU 最新版本…',
+    duration: 0,
+  });
+  try {
+    const detail = await getCloudMoldCatalogSkuDetail(row.canonicalSkuId);
+    if (!detail) {
+      throw new Error('商品不存在或无权访问');
+    }
+    skuCodeModalApi
+      .setData({
+        expectedVersion: detail.aggregateVersion,
+        id: detail.canonicalSkuId,
+        skuCode: detail.skuCode,
+      })
+      .open();
+  } catch (error) {
+    message.error(
+      `加载失败：${error instanceof Error ? error.message : '请刷新后重试'}`,
+    );
+  } finally {
+    hide();
+  }
+}
+
+function openBarcodeRotate(row: CloudMoldCatalogApi.Sku) {
+  barcodeRotateModalApi
+    .setData({
+      canonicalSkuId: row.canonicalSkuId,
+      currentBarcode: row.primaryBarcode,
+      expectedVersion: row.aggregateVersion,
+    })
+    .open();
 }
 
 const [Grid, gridApi] = useVbenVxeGrid({
@@ -167,6 +213,8 @@ function getStatusMeta(status: number) {
     <EvidenceAlert page="catalog" />
 
     <SkuModal @success="gridApi.query()" />
+    <SkuCodeModal @success="gridApi.query()" />
+    <BarcodeRotateModal @success="gridApi.query()" />
     <Grid table-title="商品与 SKU">
       <template #toolbar-tools>
         <TableAction
@@ -193,6 +241,21 @@ function getStatusMeta(status: number) {
             {
               label: '详情',
               onClick: () => openDetail(row.canonicalSkuId),
+              type: 'link',
+            },
+            {
+              auth: ['cloudmold:catalog:metadata:update'],
+              ifShow: () => row.catalogStatus !== 90,
+              label: '修改编码',
+              onClick: () => openSkuCodeUpdate(row),
+              type: 'link',
+            },
+            {
+              auth: ['cloudmold:catalog:barcode:rotate'],
+              ifShow: () =>
+                row.catalogStatus !== 90 && Boolean(row.primaryBarcode),
+              label: '轮换条码',
+              onClick: () => openBarcodeRotate(row),
               type: 'link',
             },
             {

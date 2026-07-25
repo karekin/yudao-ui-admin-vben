@@ -3,6 +3,7 @@ name: CloudMold admin web CI
 on:
   push:
     branches:
+      - master
       - feature/y-shopping-data-warehouse
       - cloudmold/main
   pull_request:

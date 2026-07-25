@@ -5,6 +5,10 @@ import { requestClient } from '#/api/request';
 import { buildCommandEnvelopeWithRunId } from '../command-helpers';
 
 export namespace CloudMoldSupplyPlanningApi {
+  export type ReplenishmentConversionTargetType =
+    | 'PURCHASE_REQUEST'
+    | 'TRANSFER_REQUEST';
+
   export interface WorkItem {
     aggregateId: string;
     aggregateVersion: number;
@@ -28,17 +32,96 @@ export namespace CloudMoldSupplyPlanningApi {
     status?: string;
   }
 
-  export interface Command {
+  export interface ForecastCommand {
     forecast?: Record<string, unknown>;
+    operation: string;
+  }
+
+  export interface ForecastEvaluationCommand {
     forecastEvaluation?: Record<string, unknown>;
+    operation: string;
+  }
+
+  export interface InventoryHealthScanCommand {
     inventoryHealthScan?: Record<string, unknown>;
+    operation: string;
+  }
+
+  export interface InventoryIssueCommand {
     inventoryIssue?: Record<string, unknown>;
     operation: string;
+  }
+
+  export interface PlanScenarioCommand {
+    operation: string;
     planScenario?: Record<string, unknown>;
+  }
+
+  export interface ReplenishmentDecisionCommand {
+    operation: string;
     replenishment?: Record<string, unknown>;
-    replenishmentConversion?: Record<string, unknown>;
+  }
+
+  export interface PurchaseReplenishmentConversion {
+    accountId: number;
+    convertedByPrincipalId: string;
+    erpProductId: number;
+    erpProductUnitId: number;
+    expectedVersion: number;
+    mappingEvidenceSha256: string;
+    recommendationId: string;
+    supplierId: number;
+    targetType: 'PURCHASE_REQUEST';
+    taxPercent: number;
+    unitCostMinor: number;
+  }
+
+  export interface TransferReplenishmentConversion {
+    convertedByPrincipalId: string;
+    expectedVersion: number;
+    mappingEvidenceSha256: string;
+    recommendationId: string;
+    sourceWarehouseId: number;
+    targetType: 'TRANSFER_REQUEST';
+    targetWarehouseId: number;
+    unitCostMinor: number;
+    wmsSkuId: number;
+  }
+
+  export type ReplenishmentConversion =
+    | PurchaseReplenishmentConversion
+    | TransferReplenishmentConversion;
+
+  export interface ReplenishmentConversionCommand {
+    operation: 'CONVERT_REPLENISHMENT';
+    replenishmentConversion: ReplenishmentConversion;
+  }
+
+  export interface SupplyPlanCommand {
+    operation: string;
     supplyPlan?: Record<string, unknown>;
   }
+
+  export type Command =
+    | ForecastCommand
+    | ForecastEvaluationCommand
+    | InventoryHealthScanCommand
+    | InventoryIssueCommand
+    | PlanScenarioCommand
+    | ReplenishmentConversionCommand
+    | ReplenishmentDecisionCommand
+    | SupplyPlanCommand
+    | {
+        forecast?: Record<string, unknown>;
+        forecastEvaluation?: Record<string, unknown>;
+        inventoryHealthScan?: Record<string, unknown>;
+        inventoryIssue?: Record<string, unknown>;
+        operation: string;
+        planScenario?: Record<string, unknown>;
+        replenishment?: Record<string, unknown>;
+        replenishmentConversion?: ReplenishmentConversion;
+        supplyPlan?: Record<string, unknown>;
+      };
 
   export interface CommandResult {
     aggregateId: string;

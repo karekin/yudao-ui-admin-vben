@@ -51,6 +51,53 @@ export function useGridFormSchema(): VbenFormSchema[] {
 
 const required = (_message: string): 'required' => 'required';
 
+export function useBarcodeRotateFormSchema(): VbenFormSchema[] {
+  return [
+    {
+      component: 'Input',
+      componentProps: {
+        disabled: true,
+      },
+      fieldName: 'currentBarcode',
+      label: '当前主条码',
+    },
+    {
+      component: 'Input',
+      componentProps: {
+        maxlength: 64,
+        placeholder: '输入新的主条码',
+      },
+      fieldName: 'barcode',
+      label: '新主条码',
+      rules: required('请输入新的主条码'),
+    },
+    {
+      component: 'Select',
+      componentProps: {
+        options: ['EAN13', 'EAN8', 'UPC', 'CODE128', 'INTERNAL'].map(
+          (value) => ({ label: value, value }),
+        ),
+      },
+      defaultValue: 'CODE128',
+      fieldName: 'barcodeType',
+      label: '条码类型',
+      rules: required('请选择条码类型'),
+    },
+    {
+      component: 'Textarea',
+      componentProps: {
+        maxlength: 512,
+        placeholder: '说明本次条码轮换原因',
+        rows: 3,
+        showCount: true,
+      },
+      fieldName: 'reason',
+      label: '轮换原因',
+      rules: required('请输入轮换原因'),
+    },
+  ];
+}
+
 export function useSkuCreateFormSchema(): VbenFormSchema[] {
   return [
     {

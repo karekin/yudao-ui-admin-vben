@@ -59,4 +59,43 @@ describe('cloudmold supply-planning api', () => {
       }),
     );
   });
+
+  it('preserves governed replenishment PREPARE mapping fields', async () => {
+    await executeSupplyPlanningCommand({
+      operation: 'CONVERT_REPLENISHMENT',
+      replenishmentConversion: {
+        accountId: 12,
+        convertedByPrincipalId: 'principal-id',
+        erpProductId: 34,
+        erpProductUnitId: 56,
+        expectedVersion: 2,
+        mappingEvidenceSha256: 'a'.repeat(64),
+        recommendationId: 'replenishment-id',
+        supplierId: 78,
+        targetType: 'PURCHASE_REQUEST',
+        taxPercent: 13,
+        unitCostMinor: 1299,
+      },
+    });
+
+    expect(requestClient.post).toHaveBeenCalledWith(
+      '/cloudmold/supply-planning/command',
+      expect.objectContaining({
+        operation: 'CONVERT_REPLENISHMENT',
+        replenishmentConversion: {
+          accountId: 12,
+          convertedByPrincipalId: 'principal-id',
+          erpProductId: 34,
+          erpProductUnitId: 56,
+          expectedVersion: 2,
+          mappingEvidenceSha256: 'a'.repeat(64),
+          recommendationId: 'replenishment-id',
+          supplierId: 78,
+          targetType: 'PURCHASE_REQUEST',
+          taxPercent: 13,
+          unitCostMinor: 1299,
+        },
+      }),
+    );
+  });
 });
