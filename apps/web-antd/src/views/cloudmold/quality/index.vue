@@ -21,12 +21,14 @@ import {
   Input,
   message,
   Modal,
+  Progress,
   Row,
   Select,
   Space,
   Statistic,
   Table,
   Tag,
+  Tooltip,
 } from 'ant-design-vue';
 
 import { getCloudMoldAfterSalePage } from '#/api/cloudmold/commerce';
@@ -35,6 +37,14 @@ import {
   executeQualityCommand,
   getQualityWorkItemPage,
 } from '#/api/cloudmold/quality';
+
+import {
+  getWorkbenchMeta,
+  matchesWorkbenchItem,
+  qualityItemMeta,
+  shortReference,
+  statusMeta,
+} from '../shared/operations-workbench';
 
 defineOptions({ name: 'CloudMoldQualityControlCenter' });
 
@@ -88,6 +98,8 @@ const commandOpen = ref(false);
 const commandSaving = ref(false);
 const commandMode = ref('CREATE_STANDARD');
 const commandForm = ref<QualityCommandForm>({});
+const queueFilter = ref('INSPECTION');
+const queueKeyword = ref('');
 
 const qualityRows = computed(() =>
   qualityInventory.value
@@ -100,39 +112,114 @@ const qualityRows = computed(() =>
     ),
 );
 
+const inspectionTasks = computed(() =>
+  workItems.value.filter((item) => item.itemType === 'INSPECTION_TASK'),
+);
+const activeInspectionCount = computed(
+  () =>
+    inspectionTasks.value.filter((item) =>
+      [
+        'ASSIGNED',
+        'CONFLICTED',
+        'CREATED',
+        'DECIDED',
+        'IN_PROGRESS',
+        'RECHECK_REQUIRED',
+      ].includes(item.status),
+    ).length,
+);
+const recheckCount = computed(
+  () =>
+    inspectionTasks.value.filter((item) =>
+      ['CONFLICTED', 'DECIDED', 'RECHECK_REQUIRED'].includes(item.status),
+    ).length,
+);
+const qualityActionCount = computed(
+  () =>
+    workItems.value.filter(
+      (item) =>
+        ['CAPA', 'RECALL_ACTION'].includes(item.itemType) &&
+        !['RESOLVED', 'VERIFIED'].includes(item.status),
+    ).length,
+);
+const completedInspectionCount = computed(
+  () =>
+    inspectionTasks.value.filter((item) => item.status === 'COMPLETED').length,
+);
+const completionRate = computed(() =>
+  inspectionTasks.value.length > 0
+    ? Math.round(
+        (completedInspectionCount.value / inspectionTasks.value.length) * 100,
+      )
+    : 0,
+);
+const filteredWorkItems = computed(() =>
+  workItems.value.filter((item) => {
+    const matchesGroup =
+      queueFilter.value === 'ALL' ||
+      (queueFilter.value === 'INSPECTION' &&
+        item.itemType === 'INSPECTION_TASK') ||
+      (queueFilter.value === 'ACTION' &&
+        ['CAPA', 'RECALL_ACTION'].includes(item.itemType)) ||
+      (queueFilter.value === 'GOVERNANCE' &&
+        ['CERTIFICATION', 'STANDARD'].includes(item.itemType));
+    return matchesGroup && matchesWorkbenchItem(item, queueKeyword.value);
+  }),
+);
+const lastUpdatedAt = computed(() => {
+  const timestamps = [
+    ...workItems.value.map((item) => item.updatedAt),
+    ...qualityInventory.value.map((item) => item.updatedAt),
+  ].filter(Boolean);
+  if (timestamps.length === 0) return '尚未同步';
+  return new Date(
+    Math.max(...timestamps.map((value) => new Date(value).getTime())),
+  ).toLocaleString('zh-CN', { hour12: false });
+});
+
 const columns = [
-  { dataIndex: 'skuCode', key: 'skuCode', title: 'SKU' },
-  { dataIndex: 'warehouseName', key: 'warehouseName', title: '仓库' },
-  { dataIndex: 'locationName', key: 'locationName', title: '库位' },
+  { key: 'inventory', title: '库存对象', width: 260 },
+  { key: 'location', title: '仓库 / 库位', width: 220 },
   { dataIndex: 'qualityStatus', key: 'qualityStatus', title: '质量状态' },
-  { dataIndex: 'quantity', key: 'quantity', title: '在手数量' },
-  { dataIndex: 'lotCode', key: 'lotCode', title: '批次' },
+  { key: 'quantity', title: '数量', width: 150 },
+  { dataIndex: 'updatedAt', key: 'updatedAt', title: '最近更新', width: 180 },
+  { key: 'action', title: '操作', width: 120 },
 ];
 
 const workItemColumns = [
-  { dataIndex: 'itemType', key: 'itemType', title: '工作项' },
-  { dataIndex: 'code', key: 'code', title: '编码 / 级别 / 优先级' },
-  { dataIndex: 'relatedRef', key: 'relatedRef', title: '关联对象' },
-  { dataIndex: 'status', key: 'status', title: '状态' },
-  { dataIndex: 'dueDate', key: 'dueDate', title: '到期日' },
-  { dataIndex: 'aggregateVersion', key: 'aggregateVersion', title: '版本' },
-  { key: 'action', title: '操作', width: 300 },
+  { key: 'overview', title: '质量事项', width: 300 },
+  { key: 'relatedRef', title: '关联对象', width: 220 },
+  { key: 'status', title: '当前状态', width: 120 },
+  { key: 'dueDate', title: '时效', width: 130 },
+  { key: 'action', title: '下一步', width: 300 },
 ];
 
-const statusColors: Record<string, string> = {
-  ACTIVE: 'green',
-  ASSIGNED: 'blue',
-  COMPLETED: 'green',
-  CONFLICTED: 'red',
-  CREATED: 'default',
-  DECIDED: 'purple',
-  DRAFT: 'default',
-  IN_PROGRESS: 'processing',
-  OPEN: 'red',
-  PUBLISHED: 'green',
-  RECHECK_REQUIRED: 'orange',
-  REVOKED: 'red',
-  VERIFIED: 'green',
+const queueOptions = [
+  { label: '质检任务', value: 'INSPECTION' },
+  { label: 'CAPA 与召回', value: 'ACTION' },
+  { label: '标准与资质', value: 'GOVERNANCE' },
+  { label: '全部事项', value: 'ALL' },
+];
+
+const commandTitles: Record<string, string> = {
+  ACKNOWLEDGE_RECALL_ACTION: '认领召回行动',
+  ADJUDICATE_INSPECTION_TASK: '第三方质检裁决',
+  ASSIGN_INSPECTION_TASK: '分派质检任务',
+  ASSIGN_RECHECK_REVIEWER: '分派独立复检',
+  CERTIFY_AUTHENTICATOR: '认证鉴别师',
+  COMPLETE_INSPECTION_TASK: '完成质检任务',
+  CREATE_INSPECTION_TASK: '创建质检任务',
+  CREATE_STANDARD: '新建鉴别标准',
+  DECIDE_INSPECTION_TASK: '提交质检判定',
+  OPEN_CAPA: '发起整改措施',
+  OPEN_RECALL_ACTION: '发起批次召回',
+  PUBLISH_STANDARD: '发布鉴别标准',
+  REQUEST_RECHECK: '申请独立复检',
+  RESOLVE_CAPA: '验证并关闭 CAPA',
+  RESOLVE_RECALL_ACTION: '完成召回行动',
+  REVOKE_AUTHENTICATOR: '撤销鉴别师资质',
+  START_INSPECTION_TASK: '开始质检',
+  SUBMIT_RECHECK_DECISION: '提交复检判定',
 };
 
 async function loadData() {
@@ -353,14 +440,31 @@ onMounted(loadData);
 </script>
 
 <template>
+  <!-- eslint-disable vue/html-closing-bracket-newline -->
   <Page auto-content-height>
-    <div class="space-y-4">
-      <Alert
-        show-icon
-        type="info"
-        message="鉴别质检中心"
-        description="鉴别标准版本、鉴别师资质、质检任务状态机与 CAPA 已进入独立业务 SoR，并与规范库存、售后事实和 Outbox 数据链联动。"
-      />
+    <div class="quality-workbench space-y-4">
+      <section class="workbench-hero">
+        <div>
+          <div class="workbench-eyebrow">QUALITY OPERATIONS</div>
+          <h1>鉴别质检工作台</h1>
+          <p>
+            统一处理待检、复检、裁决、整改与召回，让每个质量结论都有证据可追溯。
+          </p>
+          <div class="workbench-sync">
+            数据更新：{{ lastUpdatedAt }} · {{ workItemTotal }} 个质量事项 ·
+            {{ afterSaleTotal }} 个售后关联单
+          </div>
+        </div>
+        <Space wrap>
+          <Button @click="openCommand('CREATE_STANDARD')">新建标准</Button>
+          <Button @click="openCommand('CERTIFY_AUTHENTICATOR')">
+            维护资质
+          </Button>
+          <Button type="primary" @click="openCommand('CREATE_INSPECTION_TASK')">
+            创建质检任务
+          </Button>
+        </Space>
+      </section>
 
       <Alert
         v-if="loadError"
@@ -372,54 +476,134 @@ onMounted(loadData);
 
       <Row :gutter="[16, 16]">
         <Col :lg="6" :sm="12" :xs="24">
-          <Card :loading="loading">
-            <Statistic title="待质检库存" :value="pendingTotal" />
+          <Card class="metric-card metric-card--blue" :loading="loading">
+            <div class="metric-label">待办质检任务</div>
+            <Statistic :value="activeInspectionCount" />
+            <div class="metric-caption">待分派、执行中与待完成任务</div>
           </Card>
         </Col>
         <Col :lg="6" :sm="12" :xs="24">
-          <Card :loading="loading">
-            <Statistic title="瑕疵库存" :value="damagedTotal" />
+          <Card class="metric-card metric-card--warning" :loading="loading">
+            <div class="metric-label">待复核 / 裁决</div>
+            <Statistic :value="recheckCount" />
+            <div class="metric-caption">复检要求、待复核与判定冲突</div>
           </Card>
         </Col>
         <Col :lg="6" :sm="12" :xs="24">
-          <Card :loading="loading">
-            <Statistic title="拒收库存" :value="rejectedTotal" />
+          <Card class="metric-card metric-card--danger" :loading="loading">
+            <div class="metric-label">整改与召回</div>
+            <Statistic :value="qualityActionCount" />
+            <div class="metric-caption">尚未验证关闭的质量行动</div>
           </Card>
         </Col>
         <Col :lg="6" :sm="12" :xs="24">
-          <Card :loading="loading">
-            <Statistic title="售后质检关联单" :value="afterSaleTotal" />
+          <Card class="metric-card metric-card--purple" :loading="loading">
+            <div class="metric-label">受控质量库存</div>
+            <Statistic :value="pendingTotal + damagedTotal + rejectedTotal" />
+            <div class="metric-caption">
+              待检 {{ pendingTotal }} · 瑕疵 {{ damagedTotal }} · 拒收
+              {{ rejectedTotal }}
+            </div>
           </Card>
         </Col>
       </Row>
 
-      <Card :title="`鉴别质检工作项（${workItemTotal}）`">
-        <Space class="mb-4" wrap>
-          <Button type="primary" @click="openCommand('CREATE_STANDARD')">
-            新建鉴别标准
-          </Button>
-          <Button @click="openCommand('CERTIFY_AUTHENTICATOR')">
-            认证鉴别师
-          </Button>
-          <Button @click="openCommand('CREATE_INSPECTION_TASK')">
-            创建质检任务
-          </Button>
-          <Button danger @click="openCommand('OPEN_CAPA')"> 发起 CAPA </Button>
-          <Button :loading="loading" @click="loadData">刷新</Button>
-        </Space>
+      <Card class="operations-card">
+        <template #title>
+          <div class="section-heading">
+            <div>
+              <strong>质量运营队列</strong>
+              <span>按状态推进任务，每一行只展示当前合法动作</span>
+            </div>
+            <Space>
+              <Tag color="blue">
+                {{ filteredWorkItems.length }} / {{ workItemTotal }}
+              </Tag>
+              <Button :loading="loading" @click="loadData">刷新</Button>
+            </Space>
+          </div>
+        </template>
+        <div class="queue-toolbar">
+          <Space wrap>
+            <Select
+              v-model:value="queueFilter"
+              :options="queueOptions"
+              class="queue-filter"
+            />
+            <Input
+              v-model:value="queueKeyword"
+              allow-clear
+              class="queue-search"
+              placeholder="搜索任务、标准、关联对象或状态"
+            />
+          </Space>
+          <Space wrap>
+            <Button @click="openCommand('OPEN_CAPA')">发起 CAPA</Button>
+            <Button @click="router.push('/cloudmold/buyer-journey/aftersales')">
+              查看售后质检
+            </Button>
+          </Space>
+        </div>
         <Table
           :columns="workItemColumns"
-          :data-source="workItems"
+          :data-source="filteredWorkItems"
           :loading="loading"
-          :pagination="{ pageSize: 10 }"
+          :locale="{ emptyText: '当前筛选下没有质量事项' }"
+          :pagination="{ pageSize: 8, showSizeChanger: false }"
           row-key="aggregateId"
+          :scroll="{ x: 1050 }"
           size="small"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'status'">
-              <Tag :color="statusColors[record.status] ?? 'default'">
-                {{ record.status }}
+            <template v-if="column.key === 'overview'">
+              <div class="object-cell">
+                <div class="object-cell__title">
+                  <Tag
+                    :color="
+                      getWorkbenchMeta(qualityItemMeta, record.itemType).color
+                    "
+                  >
+                    {{
+                      getWorkbenchMeta(qualityItemMeta, record.itemType).label
+                    }}
+                  </Tag>
+                  <strong>{{ record.code || '未命名事项' }}</strong>
+                </div>
+                <span>
+                  更新于
+                  {{
+                    new Date(record.updatedAt).toLocaleString('zh-CN', {
+                      hour12: false,
+                    })
+                  }}
+                </span>
+              </div>
+            </template>
+            <template v-else-if="column.key === 'relatedRef'">
+              <Tooltip :title="record.relatedRef || '暂无关联对象'">
+                <span class="reference-text">
+                  {{ shortReference(record.relatedRef) }}
+                </span>
+              </Tooltip>
+            </template>
+            <template v-else-if="column.key === 'status'">
+              <Tag :color="getWorkbenchMeta(statusMeta, record.status).color">
+                {{ getWorkbenchMeta(statusMeta, record.status).label }}
               </Tag>
+            </template>
+            <template v-else-if="column.key === 'dueDate'">
+              <span
+                :class="{
+                  'due-date--danger':
+                    record.dueDate &&
+                    new Date(record.dueDate).getTime() < Date.now() &&
+                    !['COMPLETED', 'RESOLVED', 'VERIFIED'].includes(
+                      record.status,
+                    ),
+                }"
+              >
+                {{ record.dueDate || '未设置' }}
+              </span>
             </template>
             <template v-else-if="column.key === 'action'">
               <Space wrap>
@@ -565,35 +749,78 @@ onMounted(loadData);
                 >
                   完成召回
                 </Button>
+                <span
+                  v-if="
+                    ['COMPLETED', 'PUBLISHED', 'REVOKED', 'VERIFIED'].includes(
+                      record.status,
+                    )
+                  "
+                  class="action-complete"
+                >
+                  当前流程已完成
+                </span>
               </Space>
             </template>
           </template>
         </Table>
       </Card>
 
-      <Card title="质量库存待办">
-        <div class="mb-4 flex gap-3">
-          <Button
-            type="primary"
-            @click="router.push('/cloudmold/supply-chain/inventory')"
-          >
-            进入库存作业
-          </Button>
-          <Button @click="router.push('/cloudmold/buyer-journey/aftersales')">
-            查看退货质检
-          </Button>
+      <Card class="operations-card">
+        <template #title>
+          <div class="section-heading">
+            <div>
+              <strong>质量库存待办</strong>
+              <span>关联批次与库位，直接进入库存处置</span>
+            </div>
+            <Button
+              type="primary"
+              @click="router.push('/cloudmold/supply-chain/inventory')"
+            >
+              进入库存作业
+            </Button>
+          </div>
+        </template>
+        <div class="quality-health-strip">
+          <div>
+            <span>质检任务闭环率</span>
+            <strong>{{ completionRate }}%</strong>
+          </div>
+          <Progress
+            :percent="completionRate"
+            :show-info="false"
+            status="active"
+          />
+          <span>
+            已完成 {{ completedInspectionCount }} /
+            {{ inspectionTasks.length }} 个质检任务
+          </span>
         </div>
         <Table
           v-if="qualityRows.length"
           :columns="columns"
           :data-source="qualityRows"
           :loading="loading"
-          :pagination="{ pageSize: 10 }"
+          :pagination="{ pageSize: 8, showSizeChanger: false }"
           row-key="balanceId"
+          :scroll="{ x: 1030 }"
           size="small"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'qualityStatus'">
+            <template v-if="column.key === 'inventory'">
+              <div class="object-cell">
+                <strong>{{ record.skuCode }}</strong>
+                <span>批次 {{ record.lotCode || '未指定' }}</span>
+              </div>
+            </template>
+            <template v-else-if="column.key === 'location'">
+              <div class="object-cell">
+                <strong>{{
+                  record.warehouseName || record.warehouseCode
+                }}</strong>
+                <span>{{ record.locationName || record.locationCode }}</span>
+              </div>
+            </template>
+            <template v-else-if="column.key === 'qualityStatus'">
               <Tag
                 :color="
                   record.qualityStatus === 'PENDING_QC'
@@ -612,70 +839,45 @@ onMounted(loadData);
                 }}
               </Tag>
             </template>
+            <template v-else-if="column.key === 'quantity'">
+              <strong>{{ record.quantity }} {{ record.baseUomCode }}</strong>
+            </template>
+            <template v-else-if="column.key === 'updatedAt'">
+              {{
+                new Date(record.updatedAt).toLocaleString('zh-CN', {
+                  hour12: false,
+                })
+              }}
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <Button
+                type="link"
+                @click="router.push('/cloudmold/supply-chain/inventory')"
+              >
+                去处理
+              </Button>
+            </template>
           </template>
         </Table>
-        <Empty
-          v-else
-          description="暂无质量库存待办"
-          :image="simpleEmptyImage"
-        />
-      </Card>
-
-      <Card title="质量能力地图">
-        <Row :gutter="[16, 16]">
-          <Col
-            v-for="item in [
-              [
-                '鉴别标准版本',
-                '已支持品牌/品类/SKU 适用范围、内容哈希、审批与不可变版本',
-              ],
-              ['鉴定师资质', '已支持等级、证据、有效期、冲突校验与撤销'],
-              [
-                '质检任务中心',
-                '已支持分派、开检、证据、判定、复检和完整状态历史',
-              ],
-              [
-                '质量事件与 CAPA',
-                '已支持失败任务触发、根因、责任、截止日和效果验证',
-              ],
-              [
-                '批次召回联动',
-                '已支持召回动作登记、认领与解决；Lot 冻结、渠道下架和通知 Adapter 待接入',
-              ],
-              ['质量 KPI 数据链', '准确率、漏检率、时效、人效、覆盖率与成本'],
-            ]"
-            :key="item[0]"
-            :lg="8"
-            :md="12"
-            :xs="24"
-          >
-            <Card size="small">
-              <div class="mb-2 flex items-center justify-between">
-                <strong>{{ item[0] }}</strong>
-                <Tag
-                  :color="
-                    item[0].includes('召回') || item[0].includes('KPI')
-                      ? 'orange'
-                      : 'green'
-                  "
-                >
-                  {{
-                    item[0].includes('召回') || item[0].includes('KPI')
-                      ? '持续建设'
-                      : '首批可用'
-                  }}
-                </Tag>
-              </div>
-              <div class="text-muted-foreground text-sm">{{ item[1] }}</div>
-            </Card>
-          </Col>
-        </Row>
+        <Empty v-else :image="simpleEmptyImage">
+          <template #description>
+            <div class="empty-description">
+              <strong>当前没有待处理质量库存</strong>
+              <span
+                >待检、瑕疵和拒收库存均已清空，可继续处理质量任务队列。</span
+              >
+            </div>
+          </template>
+          <Button @click="openCommand('CREATE_INSPECTION_TASK')">
+            创建抽检任务
+          </Button>
+        </Empty>
       </Card>
 
       <Modal
         v-model:open="commandOpen"
         :confirm-loading="commandSaving"
-        title="鉴别质检命令"
+        :title="commandTitles[commandMode] ?? '质量业务操作'"
         width="720px"
         @ok="submitCommand"
       >
@@ -683,8 +885,8 @@ onMounted(loadData);
           class="mb-4"
           show-icon
           type="info"
-          :message="commandMode"
-          description="证据只接收内容哈希或受限存储引用；命令提交后写入状态历史和领域事件。"
+          :message="commandTitles[commandMode] ?? commandMode"
+          description="请确认对象、责任人与证据引用。提交后将进入质量状态流并自动刷新工作台。"
         />
         <Form :label-col="{ span: 7 }" :wrapper-col="{ span: 16 }">
           <template v-if="commandMode === 'CREATE_STANDARD'">
@@ -921,3 +1123,220 @@ onMounted(loadData);
     </div>
   </Page>
 </template>
+
+<style scoped>
+.quality-workbench {
+  --workbench-blue: #1677ff;
+  --workbench-purple: #7a5af8;
+  --workbench-orange: #d97904;
+  --workbench-red: #e34935;
+}
+
+.workbench-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 112px;
+  padding: 18px 24px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 80% 0%, rgb(122 90 248 / 18%), transparent 38%),
+    linear-gradient(120deg, rgb(22 119 255 / 9%), transparent 55%);
+  border: 1px solid rgb(122 90 248 / 30%);
+  border-radius: 12px;
+}
+
+.workbench-hero > div:first-child {
+  max-width: 68%;
+}
+
+.workbench-hero h1 {
+  margin: 3px 0 4px;
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.workbench-hero p {
+  margin: 0;
+  color: var(--ant-color-text-secondary);
+}
+
+.workbench-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--workbench-purple);
+  letter-spacing: 0.12em;
+}
+
+.workbench-sync {
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--ant-color-text-tertiary);
+}
+
+.metric-card {
+  position: relative;
+  min-height: 112px;
+  overflow: hidden;
+}
+
+.metric-card::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  content: '';
+  background: var(--metric-color);
+}
+
+.metric-card--blue {
+  --metric-color: var(--workbench-blue);
+}
+
+.metric-card--warning {
+  --metric-color: var(--workbench-orange);
+}
+
+.metric-card--danger {
+  --metric-color: var(--workbench-red);
+}
+
+.metric-card--purple {
+  --metric-color: var(--workbench-purple);
+}
+
+.metric-label {
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--ant-color-text-secondary);
+}
+
+.metric-caption {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--ant-color-text-tertiary);
+}
+
+.operations-card :deep(.ant-card-head) {
+  min-height: 64px;
+}
+
+.section-heading,
+.queue-toolbar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-heading > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.section-heading span {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ant-color-text-tertiary);
+}
+
+.queue-toolbar {
+  padding-bottom: 16px;
+}
+
+.queue-filter {
+  width: 160px;
+}
+
+.queue-search {
+  width: 300px;
+}
+
+.object-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.object-cell__title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.object-cell span {
+  font-size: 12px;
+  color: var(--ant-color-text-tertiary);
+}
+
+.reference-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--ant-color-text-secondary);
+}
+
+.action-complete {
+  font-size: 12px;
+  color: var(--ant-color-text-tertiary);
+}
+
+.due-date--danger {
+  font-weight: 600;
+  color: var(--workbench-red);
+}
+
+.quality-health-strip {
+  display: grid;
+  grid-template-columns: 150px minmax(220px, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+  padding: 4px 0 20px;
+}
+
+.quality-health-strip > div:first-child {
+  display: flex;
+  flex-direction: column;
+}
+
+.quality-health-strip > div:first-child span,
+.quality-health-strip > span {
+  font-size: 12px;
+  color: var(--ant-color-text-tertiary);
+}
+
+.quality-health-strip strong {
+  font-size: 24px;
+}
+
+.empty-description {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.empty-description span {
+  color: var(--ant-color-text-tertiary);
+}
+
+@media (max-width: 900px) {
+  .workbench-hero,
+  .queue-toolbar,
+  .section-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .workbench-hero > div:first-child {
+    max-width: none;
+  }
+
+  .quality-health-strip {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+</style>

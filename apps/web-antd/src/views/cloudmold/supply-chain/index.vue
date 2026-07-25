@@ -16,6 +16,7 @@ import {
   Card,
   Col,
   DatePicker,
+  Empty,
   Form,
   FormItem,
   Input,
@@ -29,6 +30,7 @@ import {
   Statistic,
   Table,
   Tag,
+  Tooltip,
 } from 'ant-design-vue';
 
 import { getCloudMoldFulfillmentPage } from '#/api/cloudmold/commerce';
@@ -37,6 +39,14 @@ import {
   executeSupplyPlanningCommand,
   getSupplyPlanningWorkItemPage,
 } from '#/api/cloudmold/supply-planning';
+
+import {
+  getWorkbenchMeta,
+  matchesWorkbenchItem,
+  shortReference,
+  statusMeta,
+  supplyItemMeta,
+} from '../shared/operations-workbench';
 
 defineOptions({ name: 'CloudMoldSupplyChainControlTower' });
 
@@ -98,6 +108,8 @@ const commandOpen = ref(false);
 const commandSaving = ref(false);
 const commandMode = ref('CREATE_FORECAST');
 const commandForm = ref<SupplyCommandForm>({});
+const workItemKeyword = ref('');
+const workItemType = ref('ALL');
 
 const toNumber = (value?: string) => Number(value ?? 0);
 
@@ -138,6 +150,57 @@ const healthyRate = computed(() => {
   );
 });
 
+const actionableWorkItemCount = computed(
+  () =>
+    workItems.value.filter(
+      (item) =>
+        ![
+          'COMPLETED',
+          'CONVERTED',
+          'PUBLISHED',
+          'REJECTED',
+          'RELEASED',
+          'RESOLVED',
+        ].includes(item.status),
+    ).length,
+);
+const pendingDecisionCount = computed(
+  () =>
+    workItems.value.filter(
+      (item) =>
+        (item.itemType === 'REPLENISHMENT' &&
+          ['APPROVED', 'PROPOSED'].includes(item.status)) ||
+        (item.itemType === 'SUPPLY_PLAN' &&
+          ['APPROVED', 'DRAFT'].includes(item.status)) ||
+        (item.itemType === 'PLAN_SCENARIO' && item.status === 'EVALUATED'),
+    ).length,
+);
+const openIssueCount = computed(
+  () =>
+    workItems.value.filter(
+      (item) =>
+        item.itemType === 'INVENTORY_ISSUE' &&
+        ['ACKNOWLEDGED', 'OPEN'].includes(item.status),
+    ).length,
+);
+const filteredWorkItems = computed(() =>
+  workItems.value.filter(
+    (item) =>
+      (workItemType.value === 'ALL' || item.itemType === workItemType.value) &&
+      matchesWorkbenchItem(item, workItemKeyword.value),
+  ),
+);
+const lastUpdatedAt = computed(() => {
+  const timestamps = [
+    ...workItems.value.map((item) => item.updatedAt),
+    ...balances.value.map((item) => item.updatedAt),
+  ].filter(Boolean);
+  if (timestamps.length === 0) return '尚未同步';
+  return new Date(
+    Math.max(...timestamps.map((value) => new Date(value).getTime())),
+  ).toLocaleString('zh-CN', { hour12: false });
+});
+
 const riskRows = computed(() =>
   balances.value
     .map((item) => {
@@ -145,12 +208,13 @@ const riskRows = computed(() =>
       let risk = '健康';
       let priority = 4;
       if (item.qualityStatus !== 'QUALIFIED') {
-        risk =
-          item.qualityStatus === 'PENDING_QC'
-            ? '待质检'
-            : item.qualityStatus === 'DAMAGED'
-              ? '瑕疵库存'
-              : '拒收库存';
+        if (item.qualityStatus === 'PENDING_QC') {
+          risk = '待质检';
+        } else if (item.qualityStatus === 'DAMAGED') {
+          risk = '瑕疵库存';
+        } else {
+          risk = '拒收库存';
+        }
         priority = 1;
       } else if (available <= 0) {
         risk = '缺货';
@@ -167,75 +231,47 @@ const riskRows = computed(() =>
 );
 
 const riskColumns = [
-  { dataIndex: 'skuCode', key: 'skuCode', title: 'SKU' },
-  { dataIndex: 'warehouseName', key: 'warehouseName', title: '仓库' },
-  { dataIndex: 'locationName', key: 'locationName', title: '库位' },
+  { key: 'inventory', title: '库存对象', width: 260 },
+  { key: 'location', title: '仓库 / 库位', width: 220 },
   { dataIndex: 'risk', key: 'risk', title: '风险' },
-  { dataIndex: 'available', key: 'available', title: '可用库存' },
-  { dataIndex: 'baseUomCode', key: 'baseUomCode', title: '单位' },
+  { key: 'quantity', title: '库存量', width: 180 },
+  { dataIndex: 'updatedAt', key: 'updatedAt', title: '最近更新', width: 180 },
+  { key: 'action', title: '操作', width: 110 },
 ];
 
 const workItemColumns = [
-  { dataIndex: 'itemType', key: 'itemType', title: '工作项' },
-  { dataIndex: 'code', key: 'code', title: '编码 / 类型' },
-  { dataIndex: 'relatedRef', key: 'relatedRef', title: '关联对象' },
-  { dataIndex: 'status', key: 'status', title: '状态' },
-  { dataIndex: 'businessDate', key: 'businessDate', title: '业务日期' },
-  { dataIndex: 'aggregateVersion', key: 'aggregateVersion', title: '版本' },
-  { key: 'action', title: '操作', width: 300 },
+  { key: 'overview', title: '业务事项', width: 300 },
+  { key: 'relatedRef', title: '关联对象', width: 190 },
+  { key: 'status', title: '当前状态', width: 120 },
+  { key: 'businessDate', title: '业务日期', width: 130 },
+  { key: 'action', title: '下一步', width: 260 },
 ];
 
-const statusColors: Record<string, string> = {
-  ACKNOWLEDGED: 'blue',
-  APPROVED: 'green',
-  COMPLETED: 'green',
-  CONVERTED: 'cyan',
-  DRAFT: 'default',
-  EVALUATED: 'purple',
-  OPEN: 'red',
-  PROPOSED: 'orange',
-  PUBLISHED: 'green',
-  REJECTED: 'red',
-  RELEASED: 'cyan',
-  RESOLVED: 'green',
-  SELECTED: 'blue',
+const workItemTypeOptions = [
+  { label: '全部事项', value: 'ALL' },
+  { label: '需求预测', value: 'FORECAST' },
+  { label: 'S&OP 计划', value: 'SUPPLY_PLAN' },
+  { label: '计划情景', value: 'PLAN_SCENARIO' },
+  { label: '补货建议', value: 'REPLENISHMENT' },
+  { label: '库存异常', value: 'INVENTORY_ISSUE' },
+];
+
+const commandTitles: Record<string, string> = {
+  ACKNOWLEDGE_INVENTORY_ISSUE: '认领库存异常',
+  APPROVE_SUPPLY_PLAN: '审批供应计划',
+  CONVERT_REPLENISHMENT: '转换补货执行单',
+  CREATE_FORECAST: '新建需求预测',
+  CREATE_SUPPLY_PLAN: '新建 S&OP 计划',
+  DECIDE_REPLENISHMENT: '审核补货建议',
+  EVALUATE_FORECAST: '执行预测回测',
+  EVALUATE_PLAN_SCENARIO: '新建计划情景测算',
+  OPEN_INVENTORY_ISSUE: '登记库存异常',
+  PUBLISH_FORECAST: '发布需求预测',
+  RELEASE_SUPPLY_PLAN: '下达供应计划',
+  RESOLVE_INVENTORY_ISSUE: '关闭库存异常',
+  RUN_INVENTORY_HEALTH_SCAN: '运行库存健康扫描',
+  SELECT_PLAN_SCENARIO: '选定计划情景',
 };
-
-const capabilityCards = [
-  {
-    title: '需求预测',
-    status: '首批可用',
-    description: '支持预测版本、实际销量快照、WAPE/Bias/MAE 回测与事件留痕。',
-  },
-  {
-    title: 'S&OP 供应计划',
-    status: '首批可用',
-    description:
-      '支持预算、产能、MOQ、安全库存多情景测算，并保留求解参数证据。',
-  },
-  {
-    title: '智能补货',
-    status: '首批可用',
-    description:
-      '支持人工决策后受控转换为采购请求或调拨请求，避免跨域直接写单。',
-  },
-  {
-    title: '库存健康',
-    status: '首批可用',
-    description: '支持版本化规则扫描、重复活动问题抑制和自动库存健康工作项。',
-  },
-  {
-    title: '采购协同',
-    status: '部分可用',
-    description:
-      '当前仅生成受控采购请求意图；真实采购 Adapter、供应商承诺和 OTIF 闭环待补。',
-  },
-  {
-    title: '仓配履约',
-    status: '部分可用',
-    description: '已有仓网、库存和单包裹履约；波次、多包裹与物流异常待补。',
-  },
-];
 
 async function loadData() {
   loading.value = true;
@@ -503,14 +539,29 @@ onMounted(loadData);
 </script>
 
 <template>
+  <!-- eslint-disable vue/html-closing-bracket-newline, vue/multiline-html-element-content-newline -->
   <Page auto-content-height>
-    <div class="space-y-4">
-      <Alert
-        show-icon
-        type="info"
-        message="供应链控制塔"
-        description="统一承接规范库存、履约、需求预测、S&OP 供应计划、补货决策与库存健康工作项；所有操作通过幂等命令、乐观版本和领域事件进入权威数据链。"
-      />
+    <div class="supply-tower space-y-4">
+      <section class="workbench-hero">
+        <div>
+          <div class="workbench-eyebrow">SUPPLY CHAIN OPERATIONS</div>
+          <h1>供应链控制塔</h1>
+          <p>
+            聚焦库存风险、供需决策和履约异常，从发现问题到下达执行形成闭环。
+          </p>
+          <div class="workbench-sync">
+            数据更新：{{ lastUpdatedAt }} · {{ balanceTotal }} 个库存余额 ·
+            {{ fulfillmentTotal }} 个履约单
+          </div>
+        </div>
+        <Space wrap>
+          <Button @click="openCommand('CREATE_FORECAST')">新建预测</Button>
+          <Button @click="openCommand('CREATE_SUPPLY_PLAN')">新建计划</Button>
+          <Button type="primary" :loading="loading" @click="loadData">
+            刷新态势
+          </Button>
+        </Space>
+      </section>
 
       <Alert
         v-if="loadError"
@@ -522,66 +573,129 @@ onMounted(loadData);
 
       <Row :gutter="[16, 16]">
         <Col :lg="6" :sm="12" :xs="24">
-          <Card :loading="loading">
-            <Statistic title="库存余额记录" :value="balanceTotal" />
+          <Card class="metric-card metric-card--danger" :loading="loading">
+            <div class="metric-label">库存风险</div>
+            <Statistic :value="stockoutCount + lowStockCount" />
+            <div class="metric-caption">
+              缺货 {{ stockoutCount }} · 低库存 {{ lowStockCount }}
+            </div>
           </Card>
         </Col>
         <Col :lg="6" :sm="12" :xs="24">
-          <Card :loading="loading">
-            <Statistic
-              title="缺货 / 低库存"
-              :value="stockoutCount + lowStockCount"
-            />
+          <Card class="metric-card metric-card--warning" :loading="loading">
+            <div class="metric-label">待决策事项</div>
+            <Statistic :value="pendingDecisionCount" />
+            <div class="metric-caption">计划审批、情景选择与补货决策</div>
           </Card>
         </Col>
         <Col :lg="6" :sm="12" :xs="24">
-          <Card :loading="loading">
-            <Statistic title="待质检库存" :value="pendingQcCount" />
+          <Card class="metric-card metric-card--blue" :loading="loading">
+            <div class="metric-label">进行中任务</div>
+            <Statistic :value="actionableWorkItemCount" />
+            <div class="metric-caption">
+              其中库存异常 {{ openIssueCount }} 项
+            </div>
           </Card>
         </Col>
         <Col :lg="6" :sm="12" :xs="24">
-          <Card :loading="loading">
-            <Statistic
-              title="进行中履约"
-              :suffix="`/ ${fulfillmentTotal}`"
-              :value="exceptionFulfillmentCount"
-            />
+          <Card class="metric-card metric-card--success" :loading="loading">
+            <div class="metric-label">库存健康度</div>
+            <Statistic suffix="%" :value="healthyRate" />
+            <div class="metric-caption">
+              待质检 {{ pendingQcCount }} · 进行中履约
+              {{ exceptionFulfillmentCount }}
+            </div>
           </Card>
         </Col>
       </Row>
 
-      <Card :title="`供应链计划工作项（${workItemTotal}）`">
-        <Space class="mb-4" wrap>
-          <Button type="primary" @click="openCommand('CREATE_FORECAST')">
-            新建需求预测
-          </Button>
-          <Button @click="openCommand('CREATE_SUPPLY_PLAN')">
-            新建 S&OP 计划
-          </Button>
-          <Button danger @click="openCommand('OPEN_INVENTORY_ISSUE')">
-            登记库存健康问题
-          </Button>
-          <Button
-            :disabled="balances.length === 0"
-            @click="openCommand('RUN_INVENTORY_HEALTH_SCAN')"
-          >
-            运行健康规则扫描
-          </Button>
-          <Button :loading="loading" @click="loadData">刷新</Button>
-        </Space>
+      <Card class="operations-card">
+        <template #title>
+          <div class="section-heading">
+            <div>
+              <strong>计划与补货决策队列</strong>
+              <span>按业务状态推进预测、计划和补货，不遗漏下一步</span>
+            </div>
+            <Tag color="blue">
+              {{ filteredWorkItems.length }} / {{ workItemTotal }}
+            </Tag>
+          </div>
+        </template>
+        <div class="queue-toolbar">
+          <Space wrap>
+            <Select
+              v-model:value="workItemType"
+              :options="workItemTypeOptions"
+              class="queue-filter"
+            />
+            <Input
+              v-model:value="workItemKeyword"
+              allow-clear
+              class="queue-search"
+              placeholder="搜索编码、状态或关联对象"
+            />
+          </Space>
+          <Space wrap>
+            <Button
+              :disabled="balances.length === 0"
+              @click="openCommand('RUN_INVENTORY_HEALTH_SCAN')"
+            >
+              运行健康扫描
+            </Button>
+            <Button danger @click="openCommand('OPEN_INVENTORY_ISSUE')">
+              登记库存异常
+            </Button>
+          </Space>
+        </div>
         <Table
           :columns="workItemColumns"
-          :data-source="workItems"
+          :data-source="filteredWorkItems"
           :loading="loading"
-          :pagination="{ pageSize: 10 }"
+          :locale="{ emptyText: '当前筛选下没有计划或补货事项' }"
+          :pagination="{ pageSize: 8, showSizeChanger: false }"
           row-key="aggregateId"
+          :scroll="{ x: 1000 }"
           size="small"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'status'">
-              <Tag :color="statusColors[record.status] ?? 'default'">
-                {{ record.status }}
+            <template v-if="column.key === 'overview'">
+              <div class="object-cell">
+                <div class="object-cell__title">
+                  <Tag
+                    :color="
+                      getWorkbenchMeta(supplyItemMeta, record.itemType).color
+                    "
+                  >
+                    {{
+                      getWorkbenchMeta(supplyItemMeta, record.itemType).label
+                    }}
+                  </Tag>
+                  <strong>{{ record.code || '未命名事项' }}</strong>
+                </div>
+                <span>
+                  更新于
+                  {{
+                    new Date(record.updatedAt).toLocaleString('zh-CN', {
+                      hour12: false,
+                    })
+                  }}
+                </span>
+              </div>
+            </template>
+            <template v-else-if="column.key === 'relatedRef'">
+              <Tooltip :title="record.relatedRef || '暂无关联对象'">
+                <span class="reference-text">
+                  {{ shortReference(record.relatedRef) }}
+                </span>
+              </Tooltip>
+            </template>
+            <template v-else-if="column.key === 'status'">
+              <Tag :color="getWorkbenchMeta(statusMeta, record.status).color">
+                {{ getWorkbenchMeta(statusMeta, record.status).label }}
               </Tag>
+            </template>
+            <template v-else-if="column.key === 'businessDate'">
+              {{ record.businessDate || '—' }}
             </template>
             <template v-else-if="column.key === 'action'">
               <Space>
@@ -696,39 +810,96 @@ onMounted(loadData);
                 >
                   解决
                 </Button>
+                <span
+                  v-if="
+                    [
+                      'COMPLETED',
+                      'CONVERTED',
+                      'PUBLISHED',
+                      'REJECTED',
+                      'RELEASED',
+                      'RESOLVED',
+                    ].includes(record.status)
+                  "
+                  class="action-complete"
+                >
+                  当前流程已完成
+                </span>
               </Space>
             </template>
           </template>
         </Table>
       </Card>
 
-      <Card title="库存健康">
-        <div class="mb-4 flex items-center gap-4">
+      <Card class="operations-card">
+        <template #title>
+          <div class="section-heading">
+            <div>
+              <strong>库存风险雷达</strong>
+              <span>优先处理影响可售库存和交付承诺的异常</span>
+            </div>
+            <Space>
+              <Button
+                @click="router.push('/cloudmold/supply-chain/warehouses')"
+              >
+                仓网视图
+              </Button>
+              <Button
+                type="primary"
+                @click="router.push('/cloudmold/supply-chain/inventory')"
+              >
+                进入库存作业
+              </Button>
+            </Space>
+          </div>
+        </template>
+        <div class="health-strip">
+          <div class="health-score">
+            <span>总体健康度</span>
+            <strong>{{ healthyRate }}%</strong>
+          </div>
           <Progress
-            class="max-w-md"
+            class="health-progress"
             :percent="healthyRate"
+            :show-info="false"
             :status="healthyRate >= 80 ? 'success' : 'exception'"
           />
-          <Button
-            type="primary"
-            @click="router.push('/cloudmold/supply-chain/inventory')"
-          >
-            处理库存
-          </Button>
-          <Button @click="router.push('/cloudmold/supply-chain/warehouses')">
-            查看仓库
-          </Button>
+          <div class="health-legend">
+            <span><i class="dot dot--danger"></i>缺货 {{ stockoutCount }}</span>
+            <span
+              ><i class="dot dot--warning"></i>低库存 {{ lowStockCount }}</span
+            >
+            <span
+              ><i class="dot dot--blue"></i>待质检 {{ pendingQcCount }}</span
+            >
+          </div>
         </div>
         <Table
+          v-if="riskRows.length"
           :columns="riskColumns"
           :data-source="riskRows"
           :loading="loading"
           :pagination="false"
           row-key="balanceId"
+          :scroll="{ x: 1040 }"
           size="small"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.key === 'risk'">
+            <template v-if="column.key === 'inventory'">
+              <div class="object-cell">
+                <strong>{{ record.skuCode }}</strong>
+                <span>批次 {{ record.lotCode || '未指定' }}</span>
+              </div>
+            </template>
+            <template v-else-if="column.key === 'location'">
+              <div class="object-cell">
+                <strong>{{
+                  record.warehouseName || record.warehouseCode
+                }}</strong>
+                <span>{{ record.locationName || record.locationCode }}</span>
+              </div>
+            </template>
+            <template v-else-if="column.key === 'risk'">
               <Tag
                 :color="
                   record.risk === '待质检'
@@ -741,46 +912,50 @@ onMounted(loadData);
                 {{ record.risk }}
               </Tag>
             </template>
+            <template v-else-if="column.key === 'quantity'">
+              <strong>{{ record.available }} {{ record.baseUomCode }}</strong>
+              <div class="quantity-caption">
+                在手 {{ record.onHandQuantity }} · 预占
+                {{ record.reservedQuantity }}
+              </div>
+            </template>
+            <template v-else-if="column.key === 'updatedAt'">
+              {{
+                new Date(record.updatedAt).toLocaleString('zh-CN', {
+                  hour12: false,
+                })
+              }}
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <Button
+                type="link"
+                @click="router.push('/cloudmold/supply-chain/inventory')"
+              >
+                去处理
+              </Button>
+            </template>
           </template>
         </Table>
-      </Card>
-
-      <Card title="能力闭环">
-        <Row :gutter="[16, 16]">
-          <Col
-            v-for="capability in capabilityCards"
-            :key="capability.title"
-            :lg="8"
-            :md="12"
-            :xs="24"
+        <Empty v-else description="当前没有缺货、低库存或质量冻结记录">
+          <template #description>
+            <div class="empty-description">
+              <strong>库存状态健康</strong>
+              <span>没有发现需要人工介入的库存风险，可运行规则扫描复核。</span>
+            </div>
+          </template>
+          <Button
+            :disabled="balances.length === 0"
+            @click="openCommand('RUN_INVENTORY_HEALTH_SCAN')"
           >
-            <Card size="small">
-              <div class="mb-2 flex items-center justify-between gap-3">
-                <strong>{{ capability.title }}</strong>
-                <Tag
-                  :color="
-                    capability.status === '首批可用'
-                      ? 'green'
-                      : capability.status === '能力缺口'
-                        ? 'red'
-                        : 'orange'
-                  "
-                >
-                  {{ capability.status }}
-                </Tag>
-              </div>
-              <div class="text-muted-foreground text-sm">
-                {{ capability.description }}
-              </div>
-            </Card>
-          </Col>
-        </Row>
+            运行健康扫描
+          </Button>
+        </Empty>
       </Card>
 
       <Modal
         v-model:open="commandOpen"
         :confirm-loading="commandSaving"
-        title="供应链计划命令"
+        :title="commandTitles[commandMode] ?? '供应链业务操作'"
         width="720px"
         @ok="submitCommand"
       >
@@ -788,8 +963,8 @@ onMounted(loadData);
           class="mb-4"
           show-icon
           type="info"
-          :message="commandMode"
-          description="提交后形成可审计业务状态、操作记录和 Outbox 事件；重复提交由幂等键保护。"
+          :message="commandTitles[commandMode] ?? commandMode"
+          description="请确认业务对象和输入参数。提交后将进入可审计状态流转，并自动刷新控制塔。"
         />
         <Form :label-col="{ span: 7 }" :wrapper-col="{ span: 16 }">
           <template v-if="commandMode === 'CREATE_FORECAST'">
@@ -1110,3 +1285,250 @@ onMounted(loadData);
     </div>
   </Page>
 </template>
+
+<style scoped>
+.supply-tower {
+  --workbench-blue: #1677ff;
+  --workbench-green: #22a06b;
+  --workbench-orange: #d97904;
+  --workbench-red: #e34935;
+}
+
+.workbench-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 112px;
+  padding: 18px 24px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 78% 0%, rgb(22 119 255 / 18%), transparent 38%),
+    linear-gradient(120deg, rgb(22 119 255 / 9%), transparent 55%);
+  border: 1px solid rgb(22 119 255 / 30%);
+  border-radius: 12px;
+}
+
+.workbench-hero > div:first-child {
+  max-width: 68%;
+}
+
+.workbench-hero h1 {
+  margin: 3px 0 4px;
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.workbench-hero p {
+  margin: 0;
+  color: var(--ant-color-text-secondary);
+}
+
+.workbench-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--workbench-blue);
+  letter-spacing: 0.12em;
+}
+
+.workbench-sync {
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--ant-color-text-tertiary);
+}
+
+.metric-card {
+  position: relative;
+  min-height: 112px;
+  overflow: hidden;
+}
+
+.metric-card::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  content: '';
+  background: var(--metric-color);
+}
+
+.metric-card--danger {
+  --metric-color: var(--workbench-red);
+}
+
+.metric-card--warning {
+  --metric-color: var(--workbench-orange);
+}
+
+.metric-card--blue {
+  --metric-color: var(--workbench-blue);
+}
+
+.metric-card--success {
+  --metric-color: var(--workbench-green);
+}
+
+.metric-label {
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--ant-color-text-secondary);
+}
+
+.metric-caption {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--ant-color-text-tertiary);
+}
+
+.operations-card :deep(.ant-card-head) {
+  min-height: 64px;
+}
+
+.section-heading,
+.queue-toolbar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.section-heading > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.section-heading span {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ant-color-text-tertiary);
+}
+
+.queue-toolbar {
+  padding-bottom: 16px;
+}
+
+.queue-filter {
+  width: 160px;
+}
+
+.queue-search {
+  width: 280px;
+}
+
+.object-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.object-cell__title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.object-cell span,
+.quantity-caption {
+  font-size: 12px;
+  color: var(--ant-color-text-tertiary);
+}
+
+.reference-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: var(--ant-color-text-secondary);
+}
+
+.action-complete {
+  font-size: 12px;
+  color: var(--ant-color-text-tertiary);
+}
+
+.health-strip {
+  display: grid;
+  grid-template-columns: 120px minmax(220px, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+  padding: 4px 0 20px;
+}
+
+.health-score {
+  display: flex;
+  flex-direction: column;
+}
+
+.health-score span {
+  font-size: 12px;
+  color: var(--ant-color-text-tertiary);
+}
+
+.health-score strong {
+  font-size: 24px;
+}
+
+.health-progress {
+  margin: 0;
+}
+
+.health-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--ant-color-text-secondary);
+}
+
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+}
+
+.dot--danger {
+  background: var(--workbench-red);
+}
+
+.dot--warning {
+  background: var(--workbench-orange);
+}
+
+.dot--blue {
+  background: var(--workbench-blue);
+}
+
+.empty-description {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.empty-description span {
+  color: var(--ant-color-text-tertiary);
+}
+
+@media (max-width: 900px) {
+  .workbench-hero,
+  .queue-toolbar,
+  .section-heading {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .workbench-hero > div:first-child {
+    max-width: none;
+  }
+
+  .health-strip {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .health-legend {
+    flex-wrap: wrap;
+  }
+}
+</style>
