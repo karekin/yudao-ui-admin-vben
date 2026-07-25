@@ -74,7 +74,7 @@ export function useOrderColumns(): VxeTableGridOptions['columns'] {
     {
       field: 'action',
       fixed: 'right',
-      minWidth: 80,
+      minWidth: 160,
       slots: { default: 'action' },
       title: '操作',
     },

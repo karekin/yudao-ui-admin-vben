@@ -71,6 +71,19 @@ function canApprove(row: CloudMoldCommerceApi.AfterSale) {
   );
 }
 
+function afterSaleActionHint(row: CloudMoldCommerceApi.AfterSale) {
+  if (row.caseStatus === AfterSaleCaseStatus.REQUESTED && !canApprove(row)) {
+    return '待授权审核';
+  }
+  if (row.caseStatus === AfterSaleCaseStatus.APPROVED) {
+    return '已审核';
+  }
+  if (row.caseStatus === AfterSaleCaseStatus.RESOLUTION_PENDING) {
+    return '自动处理中';
+  }
+  return '';
+}
+
 async function handleApprove(row: CloudMoldCommerceApi.AfterSale) {
   if (!currentPrincipal.value) {
     message.error('当前管理员未解析到 CloudMold principal，无法审核');
@@ -132,9 +145,16 @@ async function handleApprove(row: CloudMoldCommerceApi.AfterSale) {
               type: 'link',
             },
             {
+              auth: ['cloudmold:aftersale:command'],
               ifShow: () => canApprove(row),
               label: '审核',
               onClick: handleApprove.bind(null, row),
+              type: 'link',
+            },
+            {
+              disabled: true,
+              ifShow: () => Boolean(afterSaleActionHint(row)),
+              label: afterSaleActionHint(row),
               type: 'link',
             },
           ]"

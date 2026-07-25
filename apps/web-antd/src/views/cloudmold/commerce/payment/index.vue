@@ -6,7 +6,7 @@ import { ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
-import { Button, Tag } from 'ant-design-vue';
+import { Alert, Button, Tag } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getCloudMoldPaymentPage } from '#/api/cloudmold/commerce';
@@ -52,6 +52,13 @@ const [Grid] = useVbenVxeGrid({
 <template>
   <Page auto-content-height>
     <EvidenceAlert page="payment" />
+    <Alert
+      class="mb-4"
+      type="info"
+      show-icon
+      message="支付状态不允许在列表中任意修改"
+      description="收款由下单支付流程驱动；退款必须由订单取消 Saga 或售后 Resolution Saga 发起。后台不会提供绕过订单、售后、库存返还和资金守恒检查的直接退款按钮。"
+    />
 
     <Grid table-title="支付记录">
       <template #payment-no="{ row }">

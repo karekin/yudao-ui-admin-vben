@@ -228,3 +228,59 @@ export function getCloudMoldInventoryLedgerPage(
     { params },
   );
 }
+
+export const InventoryOperation = {
+  RECEIVE: 'RECEIVE',
+  RELEASE: 'RELEASE',
+  RESERVE: 'RESERVE',
+  RETURN: 'RETURN',
+  SHIP: 'SHIP',
+} as const;
+
+export namespace CloudMoldInventoryCommandApi {
+  export interface Command {
+    baseUomCode: string;
+    businessId: string;
+    businessItemId: string;
+    businessNo: string;
+    businessType: string;
+    canonicalSkuId: string;
+    locationId: string;
+    lotId?: string;
+    operation: string;
+    ownerId: string;
+    ownerType: string;
+    qualityStatus: string;
+    quantity: string;
+    reservationId?: string;
+    stockStatus: string;
+    warehouseId: string;
+  }
+
+  export interface CommandResult {
+    aggregateVersion: number;
+    allocationId?: string;
+    balanceId: string;
+    duplicate: boolean;
+    ledgerTransactionId: number;
+    operationId: number;
+    reservationId?: string;
+  }
+}
+
+/** 精确维度库存命令；数量、预占、账本与 Outbox 由后端同一事务处理。 */
+export function executeCloudMoldInventoryCommand(
+  command: CloudMoldInventoryCommandApi.Command,
+) {
+  const idempotencyKey = crypto.randomUUID();
+  return requestClient.post<CloudMoldInventoryCommandApi.CommandResult>(
+    '/cloudmold/inventory/v3/command',
+    {
+      ...command,
+      correlationId: crypto.randomUUID(),
+      idempotencyKey,
+      occurredAt: new Date().toISOString(),
+      sourceEventId: `cloudmold-admin:${idempotencyKey}`,
+    },
+  );
+}

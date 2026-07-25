@@ -13,8 +13,10 @@ import { buildMerchantCommandEnvelope } from '../command-helpers';
 export const MerchantOperation = {
   ACTIVATE_MERCHANT: 'ACTIVATE_MERCHANT',
   ACTIVATE_SHOP: 'ACTIVATE_SHOP',
+  PAUSE_SHOP: 'PAUSE_SHOP',
   RESUME_MERCHANT: 'RESUME_MERCHANT',
   RESUME_SHOP: 'RESUME_SHOP',
+  SUSPEND_MERCHANT: 'SUSPEND_MERCHANT',
 } as const;
 
 export namespace CloudMoldMerchantCommandApi {
@@ -64,6 +66,34 @@ export function resumeShop(shopId: string, expectedVersion: number) {
   return sendMerchantCommand({
     expectedVersion,
     operation: MerchantOperation.RESUME_SHOP,
+    shopId,
+  });
+}
+
+/** 停用商家：ACTIVE/RESTRICTED → SUSPENDED；会触发 Listing 物理下架 Saga。 */
+export function suspendMerchant(
+  merchantId: string,
+  expectedVersion: number,
+  reason: string,
+) {
+  return sendMerchantCommand({
+    expectedVersion,
+    merchantId,
+    operation: MerchantOperation.SUSPEND_MERCHANT,
+    reason,
+  });
+}
+
+/** 暂停店铺：ACTIVE → PAUSED；恢复营业不会自动重新上架 Listing。 */
+export function pauseShop(
+  shopId: string,
+  expectedVersion: number,
+  reason: string,
+) {
+  return sendMerchantCommand({
+    expectedVersion,
+    operation: MerchantOperation.PAUSE_SHOP,
+    reason,
     shopId,
   });
 }

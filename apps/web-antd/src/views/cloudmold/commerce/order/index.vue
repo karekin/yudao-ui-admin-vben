@@ -13,6 +13,7 @@ import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getCloudMoldOrderPage } from '#/api/cloudmold/commerce';
 import {
   completeOrder,
+  completeOrderAfterDelivery,
   confirmOrderInventory,
 } from '#/api/cloudmold/commerce/command';
 
@@ -93,7 +94,23 @@ function handleConfirmInventory(row: CloudMoldCommerceApi.Order) {
 }
 
 function handleComplete(row: CloudMoldCommerceApi.Order) {
-  return runOrderTransition(completeOrder, row, '完成订单');
+  return runOrderTransition(
+    row.fulfillmentId ? completeOrderAfterDelivery : completeOrder,
+    row,
+    '完成订单',
+  );
+}
+
+function orderActionHint(status: string) {
+  return (
+    {
+      [OrderStatus.CANCELLATION_PENDING]: '取消处理中',
+      [OrderStatus.CANCELLED]: '已取消',
+      [OrderStatus.COMPLETED]: '已完成',
+      [OrderStatus.INVENTORY_RESERVED]: '等待支付',
+      [OrderStatus.PAYMENT_CONFIRMED]: '等待履约',
+    }[status] ?? ''
+  );
 }
 </script>
 
@@ -126,15 +143,28 @@ function handleComplete(row: CloudMoldCommerceApi.Order) {
               type: 'link',
             },
             {
+              auth: ['cloudmold:order:command'],
               ifShow: () => row.status === OrderStatus.PLACED,
               label: '库存确认',
               onClick: handleConfirmInventory.bind(null, row),
               type: 'link',
             },
             {
+              auth: ['cloudmold:order:command'],
               ifShow: () => row.status === OrderStatus.SHIPPED,
               label: '完成',
-              onClick: handleComplete.bind(null, row),
+              popConfirm: {
+                confirm: handleComplete.bind(null, row),
+                title: row.fulfillmentId
+                  ? '确认完成该渠道商品订单？系统会校验绑定履约单已经送达。'
+                  : '确认该普通订单已经满足完成条件？系统会校验聚合状态和版本。',
+              },
+              type: 'link',
+            },
+            {
+              disabled: true,
+              ifShow: () => Boolean(orderActionHint(row.status)),
+              label: orderActionHint(row.status),
               type: 'link',
             },
           ]"

@@ -29,6 +29,8 @@ import {
   useSourceFormSchema,
 } from './data';
 
+import '../shared/tabbed-grid.css';
+
 defineOptions({ name: 'CloudMoldIdentity' });
 
 type StatusMeta = Record<string, { color: string; label: string }>;
@@ -111,10 +113,10 @@ const [OperationGrid] = useVbenVxeGrid({
 </script>
 
 <template>
-  <Page auto-content-height>
+  <Page auto-content-height content-class="flex min-h-0 flex-col">
     <EvidenceAlert page="identity" />
 
-    <Tabs class="w-full">
+    <Tabs class="cloudmold-grid-tabs min-h-0 w-full flex-1">
       <Tabs.TabPane key="principals" tab="身份主体">
         <PrincipalGrid table-title="经营身份">
           <template #principal-id="{ row }">

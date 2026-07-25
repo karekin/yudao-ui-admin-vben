@@ -55,6 +55,7 @@ export namespace CloudMoldCatalogApi {
     primaryBarcode?: string;
     productName: string;
     sizeCode: string;
+    sizeGroupId: string;
     sizeGroupCode: string;
     sizeId?: string;
     sizeName: string;
@@ -65,6 +66,16 @@ export namespace CloudMoldCatalogApi {
     updatedAt: string;
     variantKey?: string;
     variantKeyHash?: string;
+    colorStatus: number;
+    colorVersion: number;
+    sizeGroupStatus: number;
+    sizeGroupVersion: number;
+    sizeStatus: number;
+    sizeVersion: number;
+    spuStatus: number;
+    spuVersion: number;
+    styleStatus: number;
+    styleVersion: number;
   }
 }
 

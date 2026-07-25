@@ -175,7 +175,7 @@ export function useBalanceColumns(): VxeTableGridOptions['columns'] {
     {
       field: 'action',
       fixed: 'right',
-      minWidth: 80,
+      minWidth: 220,
       slots: { default: 'action' },
       title: '操作',
     },
@@ -229,6 +229,13 @@ export function useReservationColumns(): VxeTableGridOptions['columns'] {
       formatter: 'formatDateTime',
       minWidth: 170,
       title: '更新时间',
+    },
+    {
+      field: 'action',
+      fixed: 'right',
+      minWidth: 140,
+      slots: { default: 'action' },
+      title: '操作',
     },
   ]);
 }

@@ -4,20 +4,22 @@ import type { CloudMoldInventoryApi } from '#/api/cloudmold/inventory';
 
 import { ref } from 'vue';
 
-import { Page } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 
-import { Button, Tabs } from 'ant-design-vue';
+import { Tabs } from 'ant-design-vue';
 
-import { useVbenVxeGrid } from '#/adapter/vxe-table';
+import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
   getCloudMoldInventoryBalancePage,
   getCloudMoldInventoryLedgerPage,
   getCloudMoldInventoryReservationPage,
+  InventoryOperation,
 } from '#/api/cloudmold/inventory';
 
 import EvidenceAlert from '../shared/evidence-alert.vue';
 import StatusTag from '../shared/status-tag.vue';
 import BalanceDetailDrawer from './balance-detail-drawer.vue';
+import CommandModal from './command-modal.vue';
 import {
   qualityStatusMeta,
   reservationStatusMeta,
@@ -29,6 +31,8 @@ import {
   useReservationColumns,
   useReservationFormSchema,
 } from './data';
+
+import '../shared/tabbed-grid.css';
 
 defineOptions({ name: 'CloudMoldInventory' });
 
@@ -51,13 +55,74 @@ function getMeta(metadata: StatusMeta, status: number | string) {
 
 const balanceDetailOpen = ref(false);
 const detailBalanceId = ref<null | string>(null);
+const [InventoryCommandModal, inventoryCommandModalApi] = useVbenModal({
+  connectedComponent: CommandModal,
+  destroyOnClose: true,
+});
 
 function openBalanceDetail(balanceId: string) {
   detailBalanceId.value = balanceId;
   balanceDetailOpen.value = true;
 }
 
-const [BalanceGrid] = useVbenVxeGrid({
+function openBalanceCommand(
+  row: CloudMoldInventoryApi.Balance,
+  operation: string,
+) {
+  inventoryCommandModalApi
+    .setData({
+      baseUomCode: row.baseUomCode,
+      canonicalSkuId: row.canonicalSkuId,
+      locationCode: row.locationCode,
+      locationId: row.locationId,
+      lotId: row.lotId,
+      operation,
+      ownerId: row.ownerId,
+      ownerType: row.ownerType,
+      qualityStatus: row.qualityStatus,
+      skuCode: row.skuCode,
+      stockStatus: row.stockStatus,
+      warehouseCode: row.warehouseCode,
+      warehouseId: row.warehouseId,
+    })
+    .open();
+}
+
+function openReservationCommand(
+  row: CloudMoldInventoryApi.Reservation,
+  operation: string,
+) {
+  inventoryCommandModalApi
+    .setData({
+      baseUomCode: row.baseUomCode,
+      businessId: row.businessId,
+      businessItemId: row.businessItemId,
+      businessType: row.businessType,
+      canonicalSkuId: row.canonicalSkuId,
+      locationCode: row.locationCode,
+      locationId: row.locationId,
+      lotId: row.lotId,
+      operation,
+      ownerId: row.ownerId,
+      ownerType: row.ownerType,
+      qualityStatus: row.qualityStatus,
+      quantity: row.allocationQuantity,
+      reservationId: row.reservationId,
+      skuCode: row.skuCode,
+      stockStatus: row.stockStatus,
+      warehouseCode: row.warehouseCode,
+      warehouseId: row.warehouseId,
+    })
+    .open();
+}
+
+function refreshInventory() {
+  BalanceGridApi.query();
+  ReservationGridApi.query();
+  LedgerGridApi.query();
+}
+
+const [BalanceGrid, BalanceGridApi] = useVbenVxeGrid({
   formOptions: { schema: useBalanceFormSchema() },
   gridOptions: {
     columns: useBalanceColumns(),
@@ -78,7 +143,7 @@ const [BalanceGrid] = useVbenVxeGrid({
   } as VxeTableGridOptions<CloudMoldInventoryApi.Balance>,
 });
 
-const [ReservationGrid] = useVbenVxeGrid({
+const [ReservationGrid, ReservationGridApi] = useVbenVxeGrid({
   formOptions: { schema: useReservationFormSchema() },
   gridOptions: {
     columns: useReservationColumns(),
@@ -98,7 +163,7 @@ const [ReservationGrid] = useVbenVxeGrid({
   } as VxeTableGridOptions<CloudMoldInventoryApi.Reservation>,
 });
 
-const [LedgerGrid] = useVbenVxeGrid({
+const [LedgerGrid, LedgerGridApi] = useVbenVxeGrid({
   formOptions: { schema: useLedgerFormSchema() },
   gridOptions: {
     columns: useLedgerColumns(),
@@ -120,10 +185,11 @@ const [LedgerGrid] = useVbenVxeGrid({
 </script>
 
 <template>
-  <Page auto-content-height>
+  <Page auto-content-height content-class="flex min-h-0 flex-col">
     <EvidenceAlert page="inventory" />
+    <InventoryCommandModal @success="refreshInventory" />
 
-    <Tabs class="w-full">
+    <Tabs class="cloudmold-grid-tabs min-h-0 w-full flex-1">
       <Tabs.TabPane key="balances" tab="库存余额">
         <BalanceGrid table-title="库存余额">
           <template #stock-status="{ row }">
@@ -136,13 +202,37 @@ const [LedgerGrid] = useVbenVxeGrid({
             {{ formatDecimal(getFieldValue(row, column.field)) }}
           </template>
           <template #action="{ row }">
-            <Button
-              type="link"
-              size="small"
-              @click="openBalanceDetail(row.balanceId)"
-            >
-              详情
-            </Button>
+            <TableAction
+              :actions="[
+                {
+                  label: '详情',
+                  onClick: () => openBalanceDetail(row.balanceId),
+                  type: 'link',
+                },
+                {
+                  auth: ['cloudmold:inventory:command'],
+                  label: '入库',
+                  onClick: () =>
+                    openBalanceCommand(row, InventoryOperation.RECEIVE),
+                  type: 'link',
+                },
+                {
+                  auth: ['cloudmold:inventory:command'],
+                  ifShow: () => row.allocationEligibility === 'ALLOCATABLE',
+                  label: '预占',
+                  onClick: () =>
+                    openBalanceCommand(row, InventoryOperation.RESERVE),
+                  type: 'link',
+                },
+                {
+                  auth: ['cloudmold:inventory:command'],
+                  label: '退货入库',
+                  onClick: () =>
+                    openBalanceCommand(row, InventoryOperation.RETURN),
+                  type: 'link',
+                },
+              ]"
+            />
           </template>
         </BalanceGrid>
       </Tabs.TabPane>
@@ -159,6 +249,35 @@ const [LedgerGrid] = useVbenVxeGrid({
           </template>
           <template #quantity="{ row, column }">
             {{ formatDecimal(getFieldValue(row, column.field)) }}
+          </template>
+          <template #action="{ row }">
+            <TableAction
+              :actions="[
+                {
+                  auth: ['cloudmold:inventory:command'],
+                  ifShow: () => row.status === 10,
+                  label: '确认出库',
+                  popConfirm: {
+                    confirm: () =>
+                      openReservationCommand(row, InventoryOperation.SHIP),
+                    title: '确认按该预占数量出库？出库后预占将进入已提交状态。',
+                  },
+                  type: 'link',
+                },
+                {
+                  auth: ['cloudmold:inventory:command'],
+                  ifShow: () => row.status === 10,
+                  label: '释放',
+                  popConfirm: {
+                    confirm: () =>
+                      openReservationCommand(row, InventoryOperation.RELEASE),
+                    title:
+                      '确认释放该预占？系统会恢复可用库存并记录不可变流水。',
+                  },
+                  type: 'link',
+                },
+              ]"
+            />
           </template>
         </ReservationGrid>
       </Tabs.TabPane>

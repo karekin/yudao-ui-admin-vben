@@ -1,0 +1,12 @@
+.cloudmold-grid-tabs > .ant-tabs-content-holder {
+  min-height: 0;
+}
+
+.cloudmold-grid-tabs > .ant-tabs-content-holder > .ant-tabs-content,
+.cloudmold-grid-tabs
+  > .ant-tabs-content-holder
+  > .ant-tabs-content
+  > .ant-tabs-tabpane {
+  height: 100%;
+  min-height: 0;
+}

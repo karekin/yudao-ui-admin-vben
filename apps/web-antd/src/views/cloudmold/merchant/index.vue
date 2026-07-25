@@ -3,9 +3,11 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CloudMoldMerchantApi } from '#/api/cloudmold/merchant';
 import type { CloudMoldMerchantCommandApi } from '#/api/cloudmold/merchant/command';
 
+import { ref } from 'vue';
+
 import { Page } from '@vben/common-ui';
 
-import { message, Tabs } from 'ant-design-vue';
+import { Input, message, Modal, Tabs } from 'ant-design-vue';
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
@@ -15,8 +17,10 @@ import {
 import {
   activateMerchant,
   activateShop,
+  pauseShop,
   resumeMerchant,
   resumeShop,
+  suspendMerchant,
 } from '#/api/cloudmold/merchant/command';
 
 import CopyIdCell from '../shared/copy-id-cell.vue';
@@ -32,6 +36,8 @@ import {
   useShopColumns,
   useShopFormSchema,
 } from './data';
+
+import '../shared/tabbed-grid.css';
 
 defineOptions({ name: 'CloudMoldMerchant' });
 
@@ -168,13 +174,50 @@ function handleActivateShop(row: CloudMoldMerchantApi.Shop) {
 function handleResumeShop(row: CloudMoldMerchantApi.Shop) {
   return runShopTransition(resumeShop, row, '恢复店铺');
 }
+
+const reasonOpen = ref(false);
+const reasonText = ref('');
+const reasonTitle = ref('');
+const reasonSubmitting = ref(false);
+const reasonCommand = ref<(() => Promise<unknown>) | null>(null);
+
+function askReason(
+  title: string,
+  command: (reason: string) => Promise<unknown>,
+) {
+  reasonTitle.value = title;
+  reasonText.value = '';
+  reasonCommand.value = () => command(reasonText.value.trim());
+  reasonOpen.value = true;
+}
+
+async function confirmReasonCommand() {
+  if (!reasonText.value.trim() || !reasonCommand.value) {
+    message.warning('请输入操作原因');
+    return;
+  }
+  reasonSubmitting.value = true;
+  try {
+    await reasonCommand.value();
+    message.success(`${reasonTitle.value}成功`);
+    reasonOpen.value = false;
+    handleRefreshMerchant();
+    handleRefreshShop();
+  } catch (error) {
+    message.error(
+      `${reasonTitle.value}失败：${error instanceof Error ? error.message : '请刷新后重试'}`,
+    );
+  } finally {
+    reasonSubmitting.value = false;
+  }
+}
 </script>
 
 <template>
-  <Page auto-content-height>
+  <Page auto-content-height content-class="flex min-h-0 flex-col">
     <EvidenceAlert page="merchant" />
 
-    <Tabs class="w-full">
+    <Tabs class="cloudmold-grid-tabs min-h-0 w-full flex-1">
       <Tabs.TabPane key="merchants" tab="商家">
         <MerchantGrid table-title="商家">
           <template #merchant-code="{ row }">
@@ -187,6 +230,7 @@ function handleResumeShop(row: CloudMoldMerchantApi.Shop) {
             <TableAction
               :actions="[
                 {
+                  auth: ['cloudmold:merchant:command'],
                   ifShow: () =>
                     row.status === MerchantStatus.PENDING_ACTIVATION,
                   label: '激活',
@@ -194,9 +238,24 @@ function handleResumeShop(row: CloudMoldMerchantApi.Shop) {
                   type: 'link',
                 },
                 {
+                  auth: ['cloudmold:merchant:command'],
                   ifShow: () => row.status === MerchantStatus.SUSPENDED,
                   label: '恢复',
                   onClick: handleResumeMerchant.bind(null, row),
+                  type: 'link',
+                },
+                {
+                  auth: ['cloudmold:merchant:command'],
+                  danger: true,
+                  ifShow: () =>
+                    [MerchantStatus.ACTIVE, MerchantStatus.RESTRICTED].includes(
+                      row.status,
+                    ),
+                  label: '停用',
+                  onClick: () =>
+                    askReason('停用商家', (reason) =>
+                      suspendMerchant(row.merchantId, row.version, reason),
+                    ),
                   type: 'link',
                 },
               ]"
@@ -217,15 +276,28 @@ function handleResumeShop(row: CloudMoldMerchantApi.Shop) {
             <TableAction
               :actions="[
                 {
+                  auth: ['cloudmold:merchant:command'],
                   ifShow: () => row.status === ShopStatus.DRAFT,
                   label: '激活',
                   onClick: handleActivateShop.bind(null, row),
                   type: 'link',
                 },
                 {
+                  auth: ['cloudmold:merchant:command'],
                   ifShow: () => row.status === ShopStatus.PAUSED,
                   label: '恢复',
                   onClick: handleResumeShop.bind(null, row),
+                  type: 'link',
+                },
+                {
+                  auth: ['cloudmold:merchant:command'],
+                  danger: true,
+                  ifShow: () => row.status === ShopStatus.ACTIVE,
+                  label: '暂停',
+                  onClick: () =>
+                    askReason('暂停店铺', (reason) =>
+                      pauseShop(row.shopId, row.version, reason),
+                    ),
                   type: 'link',
                 },
               ]"
@@ -234,5 +306,23 @@ function handleResumeShop(row: CloudMoldMerchantApi.Shop) {
         </ShopGrid>
       </Tabs.TabPane>
     </Tabs>
+
+    <Modal
+      v-model:open="reasonOpen"
+      :confirm-loading="reasonSubmitting"
+      :title="reasonTitle"
+      @ok="confirmReasonCommand"
+    >
+      <div class="mb-2 text-sm text-gray-500">
+        该操作可能触发渠道商品物理下架；恢复营业后不会自动重新上架。
+      </div>
+      <Input.TextArea
+        v-model:value="reasonText"
+        :maxlength="256"
+        :rows="4"
+        show-count
+        placeholder="请输入明确、可审计的操作原因"
+      />
+    </Modal>
   </Page>
 </template>

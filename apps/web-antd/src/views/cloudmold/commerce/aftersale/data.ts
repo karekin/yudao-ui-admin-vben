@@ -78,7 +78,7 @@ export function useAfterSaleColumns(): VxeTableGridOptions['columns'] {
     {
       field: 'action',
       fixed: 'right',
-      minWidth: 80,
+      minWidth: 170,
       slots: { default: 'action' },
       title: '操作',
     },

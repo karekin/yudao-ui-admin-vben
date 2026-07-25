@@ -64,7 +64,7 @@ export function useFulfillmentColumns(): VxeTableGridOptions['columns'] {
     {
       field: 'action',
       fixed: 'right',
-      minWidth: 80,
+      minWidth: 190,
       slots: { default: 'action' },
       title: '操作',
     },

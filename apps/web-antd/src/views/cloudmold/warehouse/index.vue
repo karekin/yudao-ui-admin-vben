@@ -33,6 +33,8 @@ import {
   warehouseStatusMeta,
 } from './data';
 
+import '../shared/tabbed-grid.css';
+
 defineOptions({ name: 'CloudMoldWarehouse' });
 
 type StatusMeta = Record<string, { color: string; label: string }>;
@@ -175,10 +177,10 @@ const locationActions = entityTransition(changeLocationStatus, '库位', () =>
 </script>
 
 <template>
-  <Page auto-content-height>
+  <Page auto-content-height content-class="flex min-h-0 flex-col">
     <EvidenceAlert page="warehouse" />
 
-    <Tabs class="w-full">
+    <Tabs class="cloudmold-grid-tabs min-h-0 w-full flex-1">
       <Tabs.TabPane key="warehouses" tab="仓库">
         <WarehouseGrid table-title="仓库">
           <template #warehouse-code="{ row }">
@@ -191,6 +193,7 @@ const locationActions = entityTransition(changeLocationStatus, '库位', () =>
             <TableAction
               :actions="[
                 {
+                  auth: ['cloudmold:warehouse:command'],
                   ifShow: () => row.status !== 'ACTIVE',
                   label: '启用',
                   onClick: warehouseActions.enable.bind(
@@ -201,13 +204,17 @@ const locationActions = entityTransition(changeLocationStatus, '库位', () =>
                   type: 'link',
                 },
                 {
+                  auth: ['cloudmold:warehouse:command'],
                   ifShow: () => row.status === 'ACTIVE',
                   label: '停用',
-                  onClick: warehouseActions.disable.bind(
-                    null,
-                    row,
-                    row.warehouseId,
-                  ),
+                  popConfirm: {
+                    confirm: warehouseActions.disable.bind(
+                      null,
+                      row,
+                      row.warehouseId,
+                    ),
+                    title: '确认停用该仓库？系统会校验版本及下游业务约束。',
+                  },
                   type: 'link',
                 },
               ]"
@@ -228,15 +235,20 @@ const locationActions = entityTransition(changeLocationStatus, '库位', () =>
             <TableAction
               :actions="[
                 {
+                  auth: ['cloudmold:warehouse:command'],
                   ifShow: () => row.status !== 'ACTIVE',
                   label: '启用',
                   onClick: zoneActions.enable.bind(null, row, row.zoneId),
                   type: 'link',
                 },
                 {
+                  auth: ['cloudmold:warehouse:command'],
                   ifShow: () => row.status === 'ACTIVE',
                   label: '停用',
-                  onClick: zoneActions.disable.bind(null, row, row.zoneId),
+                  popConfirm: {
+                    confirm: zoneActions.disable.bind(null, row, row.zoneId),
+                    title: '确认停用该库区？系统会校验版本及下游业务约束。',
+                  },
                   type: 'link',
                 },
               ]"
@@ -260,6 +272,7 @@ const locationActions = entityTransition(changeLocationStatus, '库位', () =>
             <TableAction
               :actions="[
                 {
+                  auth: ['cloudmold:warehouse:command'],
                   ifShow: () => row.status !== 'ACTIVE',
                   label: '启用',
                   onClick: locationActions.enable.bind(
@@ -270,13 +283,17 @@ const locationActions = entityTransition(changeLocationStatus, '库位', () =>
                   type: 'link',
                 },
                 {
+                  auth: ['cloudmold:warehouse:command'],
                   ifShow: () => row.status === 'ACTIVE',
                   label: '停用',
-                  onClick: locationActions.disable.bind(
-                    null,
-                    row,
-                    row.locationId,
-                  ),
+                  popConfirm: {
+                    confirm: locationActions.disable.bind(
+                      null,
+                      row,
+                      row.locationId,
+                    ),
+                    title: '确认停用该库位？系统会校验版本及库存约束。',
+                  },
                   type: 'link',
                 },
               ]"

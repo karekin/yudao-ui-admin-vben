@@ -7,13 +7,14 @@ import { ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
-import { message } from 'ant-design-vue';
+import { Input, message, Modal } from 'ant-design-vue';
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getCloudMoldFulfillmentPage } from '#/api/cloudmold/commerce';
 import {
   deliverFulfillment,
   markFulfillmentInTransit,
+  shipFulfillment,
 } from '#/api/cloudmold/commerce/command';
 
 import CopyIdCell from '../../shared/copy-id-cell.vue';
@@ -99,6 +100,58 @@ function handleMarkInTransit(row: CloudMoldCommerceApi.Fulfillment) {
 function handleDeliver(row: CloudMoldCommerceApi.Fulfillment) {
   return runFulfillmentTransition(deliverFulfillment, row, '投递完成');
 }
+
+function fulfillmentActionHint(status: string) {
+  return (
+    {
+      [FulfillmentStatus.CANCELLATION_PENDING]: '取消处理中',
+      [FulfillmentStatus.CANCELLED]: '已取消',
+      [FulfillmentStatus.DELIVERED]: '流程已结束',
+    }[status] ?? ''
+  );
+}
+
+const shipOpen = ref(false);
+const shipCarrierCode = ref('');
+const shipWaybillNo = ref('');
+const shipping = ref(false);
+const shipRow = ref<CloudMoldCommerceApi.Fulfillment | null>(null);
+
+function handleShip(row: CloudMoldCommerceApi.Fulfillment) {
+  shipRow.value = row;
+  shipCarrierCode.value = '';
+  shipWaybillNo.value = '';
+  shipOpen.value = true;
+}
+
+async function confirmShip() {
+  if (
+    !shipRow.value ||
+    !shipCarrierCode.value.trim() ||
+    !shipWaybillNo.value.trim()
+  ) {
+    message.warning('请输入承运商编码和运单号');
+    return;
+  }
+  shipping.value = true;
+  try {
+    await shipFulfillment(
+      shipRow.value.fulfillmentId,
+      shipRow.value.aggregateVersion,
+      shipCarrierCode.value.trim().toUpperCase(),
+      shipWaybillNo.value.trim(),
+    );
+    message.success('发货成功');
+    shipOpen.value = false;
+    handleRefresh();
+  } catch (error) {
+    message.error(
+      `发货失败：${error instanceof Error ? error.message : '请刷新后重试'}`,
+    );
+  } finally {
+    shipping.value = false;
+  }
+}
 </script>
 
 <template>
@@ -127,15 +180,33 @@ function handleDeliver(row: CloudMoldCommerceApi.Fulfillment) {
               type: 'link',
             },
             {
+              auth: ['cloudmold:fulfillment:command'],
+              ifShow: () => row.status === FulfillmentStatus.CREATED,
+              label: '发货',
+              onClick: handleShip.bind(null, row),
+              type: 'link',
+            },
+            {
+              auth: ['cloudmold:fulfillment:command'],
               ifShow: () => row.status === FulfillmentStatus.SHIPPED,
               label: '标记在途',
               onClick: handleMarkInTransit.bind(null, row),
               type: 'link',
             },
             {
+              auth: ['cloudmold:fulfillment:command'],
               ifShow: () => row.status === FulfillmentStatus.IN_TRANSIT,
               label: '投递完成',
-              onClick: handleDeliver.bind(null, row),
+              popConfirm: {
+                confirm: handleDeliver.bind(null, row),
+                title: '确认包裹已送达？该事实将参与订单完成门禁。',
+              },
+              type: 'link',
+            },
+            {
+              disabled: true,
+              ifShow: () => Boolean(fulfillmentActionHint(row.status)),
+              label: fulfillmentActionHint(row.status),
               type: 'link',
             },
           ]"
@@ -147,5 +218,21 @@ function handleDeliver(row: CloudMoldCommerceApi.Fulfillment) {
       v-model:open="detailOpen"
       :fulfillment-id="detailFulfillmentId"
     />
+    <Modal
+      v-model:open="shipOpen"
+      :confirm-loading="shipping"
+      title="确认发货"
+      @ok="confirmShip"
+    >
+      <div class="mb-3 text-sm text-gray-500">
+        承运商和运单号在发货后不可修改，请与实际面单核对。
+      </div>
+      <Input
+        v-model:value="shipCarrierCode"
+        class="mb-3"
+        placeholder="承运商编码，例如 SF"
+      />
+      <Input v-model:value="shipWaybillNo" placeholder="运单号" />
+    </Modal>
   </Page>
 </template>

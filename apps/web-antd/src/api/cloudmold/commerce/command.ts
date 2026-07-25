@@ -13,11 +13,13 @@ import { buildCommandEnvelopeWithRunId } from '../command-helpers';
 export const FulfillmentOperation = {
   DELIVER: 'DELIVER',
   MARK_IN_TRANSIT: 'MARK_IN_TRANSIT',
+  SHIP: 'SHIP',
 } as const;
 
 /** Order 订单状态转换 operation（对齐后端 OrderOperation） */
 export const OrderOperation = {
   COMPLETE: 'COMPLETE',
+  COMPLETE_AFTER_DELIVERY: 'COMPLETE_AFTER_DELIVERY',
   CONFIRM_INVENTORY: 'CONFIRM_INVENTORY',
 } as const;
 
@@ -73,6 +75,22 @@ export function deliverFulfillment(
   });
 }
 
+/** Fulfillment 发货：CREATED → SHIPPED，承运商与运单号写入后不可变。 */
+export function shipFulfillment(
+  fulfillmentId: string,
+  expectedVersion: number,
+  carrierCode: string,
+  waybillNo: string,
+) {
+  return sendCommerceCommand('/cloudmold/fulfillment/command', {
+    carrierCode,
+    expectedVersion,
+    fulfillmentId,
+    operation: FulfillmentOperation.SHIP,
+    waybillNo,
+  });
+}
+
 /** Order 库存预占确认：PLACED → INVENTORY_RESERVED */
 export function confirmOrderInventory(
   orderId: string,
@@ -90,6 +108,18 @@ export function completeOrder(orderId: string, expectedVersion: number) {
   return sendCommerceCommand('/cloudmold/order/command', {
     expectedVersion,
     operation: OrderOperation.COMPLETE,
+    orderId,
+  });
+}
+
+/** Listing-backed Order 完成：SHIPPED → COMPLETED，后端校验绑定履约单已送达。 */
+export function completeOrderAfterDelivery(
+  orderId: string,
+  expectedVersion: number,
+) {
+  return sendCommerceCommand('/cloudmold/order/command', {
+    expectedVersion,
+    operation: OrderOperation.COMPLETE_AFTER_DELIVERY,
     orderId,
   });
 }
