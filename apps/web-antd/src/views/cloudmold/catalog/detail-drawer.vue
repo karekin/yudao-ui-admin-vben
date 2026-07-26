@@ -6,6 +6,8 @@ import { computed, ref, watch } from 'vue';
 import { formatDateTime } from '@vben/utils';
 
 import {
+  Alert,
+  Button,
   Descriptions,
   DescriptionsItem,
   Drawer,
@@ -14,11 +16,24 @@ import {
   Table,
 } from 'ant-design-vue';
 
-import { getCloudMoldCatalogSkuDetail } from '#/api/cloudmold/catalog';
+import {
+  getCloudMoldCatalogSkuDetail,
+  getCloudMoldSkuSellability,
+} from '#/api/cloudmold/catalog';
 
 import CopyIdCell from '../shared/copy-id-cell.vue';
+import {
+  getWorkbenchMeta,
+  statusMeta as workbenchStatusMeta,
+} from '../shared/operations-workbench';
 import StatusTag from '../shared/status-tag.vue';
-import { catalogStatusMeta } from './data';
+import {
+  blockerLabel,
+  catalogStatusMeta,
+  qualityDecisionMeta,
+  qualityStatusMeta,
+  sellabilityStatusMeta,
+} from './data';
 
 import '../shared/detail-layout.css';
 
@@ -35,6 +50,10 @@ const emit = defineEmits<{
 
 const loading = ref(false);
 const detail = ref<CloudMoldCatalogApi.SkuDetail | null>(null);
+const detailLoadFailed = ref(false);
+const sellability = ref<CloudMoldCatalogApi.SkuSellability | null>(null);
+const sellabilityLoadFailed = ref(false);
+let loadSequence = 0;
 
 const openProxy = computed({
   get: () => props.open,
@@ -53,6 +72,28 @@ function statusMeta(status?: number) {
   );
 }
 
+function stringStatusMeta(
+  metadata: Record<string, { color: string; label: string }>,
+  status?: string,
+) {
+  if (!status) return { color: 'default', label: '未知' };
+  return (
+    metadata[status] ?? {
+      color: 'default',
+      label: `未知 (${status})`,
+    }
+  );
+}
+
+const standardLabel = computed(() => {
+  const quality = sellability.value?.quality;
+  if (!quality?.standardCode && !quality?.standardId) return '-';
+  const standard = quality.standardCode ?? quality.standardId;
+  return quality.standardVersion
+    ? `${standard} · v${quality.standardVersion}`
+    : standard;
+});
+
 const barcodeColumns = [
   { title: '条码', dataIndex: 'barcode', key: 'barcode' },
   { title: '类型', dataIndex: 'barcodeType', key: 'barcodeType', width: 110 },
@@ -66,12 +107,32 @@ async function load() {
   if (!props.skuId) {
     return;
   }
+  const sequence = ++loadSequence;
   loading.value = true;
   detail.value = null;
+  detailLoadFailed.value = false;
+  sellability.value = null;
+  sellabilityLoadFailed.value = false;
   try {
-    detail.value = await getCloudMoldCatalogSkuDetail(props.skuId);
+    const [detailResult, sellabilityResult] = await Promise.allSettled([
+      getCloudMoldCatalogSkuDetail(props.skuId),
+      getCloudMoldSkuSellability(props.skuId),
+    ]);
+    if (sequence !== loadSequence) return;
+    if (detailResult.status === 'fulfilled') {
+      detail.value = detailResult.value;
+    } else {
+      detailLoadFailed.value = true;
+    }
+    if (sellabilityResult.status === 'fulfilled') {
+      sellability.value = sellabilityResult.value;
+    } else {
+      sellabilityLoadFailed.value = true;
+    }
   } finally {
-    loading.value = false;
+    if (sequence === loadSequence) {
+      loading.value = false;
+    }
   }
 }
 
@@ -97,7 +158,17 @@ watch(
   >
     <Spin :spinning="loading">
       <Result
-        v-if="!loading && !detail"
+        v-if="!loading && detailLoadFailed"
+        status="error"
+        title="商品详情加载失败"
+        sub-title="接口或网络暂时不可用，请重试；系统不会把故障误判为商品不存在。"
+      >
+        <template #extra>
+          <Button type="primary" @click="load">重新加载</Button>
+        </template>
+      </Result>
+      <Result
+        v-else-if="!loading && !detail"
         status="info"
         title="未找到商品"
         sub-title="该商品不存在，或当前账号没有查看权限。"
@@ -130,6 +201,109 @@ watch(
           </DescriptionsItem>
           <DescriptionsItem label="聚合版本">
             {{ detail.aggregateVersion }}
+          </DescriptionsItem>
+        </Descriptions>
+
+        <Descriptions
+          title="质量与可售状态"
+          :column="{ xs: 1, sm: 2 }"
+          bordered
+          size="small"
+          class="mb-4"
+        >
+          <template v-if="sellability">
+            <DescriptionsItem label="综合可售">
+              <StatusTag
+                v-bind="
+                  sellability.sellable
+                    ? sellabilityStatusMeta.sellable
+                    : sellabilityStatusMeta.blocked
+                "
+              />
+            </DescriptionsItem>
+            <DescriptionsItem label="鉴别状态">
+              <StatusTag
+                v-bind="
+                  stringStatusMeta(
+                    qualityStatusMeta,
+                    sellability.quality.status,
+                  )
+                "
+              />
+            </DescriptionsItem>
+            <DescriptionsItem label="质检结论">
+              <StatusTag
+                v-bind="
+                  stringStatusMeta(
+                    qualityDecisionMeta,
+                    sellability.quality.decision,
+                  )
+                "
+              />
+            </DescriptionsItem>
+            <DescriptionsItem label="任务状态">
+              <StatusTag
+                v-bind="
+                  getWorkbenchMeta(
+                    workbenchStatusMeta,
+                    sellability.quality.inspectionStatus ?? 'UNKNOWN',
+                  )
+                "
+              />
+            </DescriptionsItem>
+            <DescriptionsItem label="质检任务">
+              <CopyIdCell
+                v-if="sellability.quality.inspectionTaskId"
+                :value="sellability.quality.inspectionTaskId"
+                label="质检任务"
+              />
+              <span v-else>-</span>
+            </DescriptionsItem>
+            <DescriptionsItem label="鉴别标准">
+              {{ standardLabel }}
+            </DescriptionsItem>
+            <DescriptionsItem label="完成时间">
+              {{
+                sellability.quality.completedAt
+                  ? formatDateTime(sellability.quality.completedAt)
+                  : '-'
+              }}
+            </DescriptionsItem>
+            <DescriptionsItem label="判定时间">
+              {{
+                sellability.quality.inspectedAt
+                  ? formatDateTime(sellability.quality.inspectedAt)
+                  : '-'
+              }}
+            </DescriptionsItem>
+            <DescriptionsItem label="可分配库存">
+              {{ sellability.inventory.allocatableQuantity }}
+              {{ sellability.inventory.baseUomCode ?? detail.baseUomCode }}
+            </DescriptionsItem>
+            <DescriptionsItem label="渠道发布">
+              {{ sellability.listing.publishedListingCount }} 个发布 /
+              {{ sellability.listing.enabledOfferCount }} 个有效报价
+              <span v-if="sellability.listing.channels.length">
+                （{{ sellability.listing.channels.join('、') }}）
+              </span>
+            </DescriptionsItem>
+            <DescriptionsItem
+              v-if="sellability.blockingReasonCodes.length"
+              label="不可售原因"
+              :span="2"
+            >
+              {{ sellability.blockingReasonCodes.map(blockerLabel).join('；') }}
+            </DescriptionsItem>
+          </template>
+          <DescriptionsItem v-else label="状态" :span="2">
+            <Alert
+              v-if="sellabilityLoadFailed"
+              type="warning"
+              show-icon
+              message="质量与可售状态加载失败"
+              description="商品主数据仍可查看，请稍后刷新；系统不会把未知状态显示为鉴别通过。"
+            />
+            <span v-else>加载中…</span>
           </DescriptionsItem>
         </Descriptions>
 

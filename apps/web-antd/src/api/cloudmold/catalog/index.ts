@@ -77,6 +77,34 @@ export namespace CloudMoldCatalogApi {
     styleStatus: number;
     styleVersion: number;
   }
+
+  export interface SkuSellability {
+    blockingReasonCodes: string[];
+    canonicalSkuId: string;
+    inventory: {
+      allocatableQuantity: number;
+      balanceCount: number;
+      baseUomCode?: string;
+      inventoryVersion?: number;
+    };
+    listing: {
+      channels: string[];
+      enabledOfferCount: number;
+      publishedListingCount: number;
+    };
+    quality: {
+      completedAt?: string;
+      decision?: string;
+      inspectedAt?: string;
+      inspectionStatus?: string;
+      inspectionTaskId?: string;
+      standardCode?: string;
+      standardId?: string;
+      standardVersion?: number;
+      status: string;
+    };
+    sellable: boolean;
+  }
 }
 
 /** 查询当前租户的 CloudMold 规范 SKU，不读取 yudao Product/ERP/WMS 商品表。 */
@@ -94,5 +122,13 @@ export function getCloudMoldCatalogSkuDetail(skuId: string) {
   return requestClient.get<CloudMoldCatalogApi.SkuDetail | null>(
     '/cloudmold/catalog/skus/get',
     { params: { skuId } },
+  );
+}
+
+/** 查询 SKU 的质量、库存、渠道发布与综合可售状态。 */
+export function getCloudMoldSkuSellability(canonicalSkuId: string) {
+  return requestClient.get<CloudMoldCatalogApi.SkuSellability>(
+    '/cloudmold/listing/sku-sellability',
+    { params: { canonicalSkuId } },
   );
 }

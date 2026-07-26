@@ -13,6 +13,34 @@ export const catalogStatusMeta: Record<
   90: { color: 'error', label: '归档' },
 };
 
+export const sellabilityStatusMeta = {
+  blocked: { color: 'error', label: '不可售' },
+  sellable: { color: 'success', label: '可售' },
+};
+
+export const qualityStatusMeta = {
+  RECALLED: { color: 'error', label: '已召回' },
+  REJECTED: { color: 'error', label: '鉴别未通过' },
+  UNVERIFIED: { color: 'warning', label: '待鉴别' },
+  VERIFIED: { color: 'success', label: '鉴别通过' },
+} satisfies Record<string, { color: string; label: string }>;
+
+export const qualityDecisionMeta = {
+  FAIL: { color: 'error', label: '不通过' },
+  PASS: { color: 'success', label: '通过' },
+} satisfies Record<string, { color: string; label: string }>;
+
+export const sellabilityBlockerLabels: Record<string, string> = {
+  CATALOG_INACTIVE: '商品未生效',
+  NO_ALLOCATABLE_INVENTORY: '没有可分配库存',
+  NO_PUBLISHED_OFFER: '没有生效中的渠道报价',
+  QUALITY_NOT_VERIFIED: '鉴别尚未通过',
+};
+
+export function blockerLabel(code: string): string {
+  return sellabilityBlockerLabels[code] ?? code.replaceAll('_', ' ');
+}
+
 export function useGridFormSchema(): VbenFormSchema[] {
   return [
     {
