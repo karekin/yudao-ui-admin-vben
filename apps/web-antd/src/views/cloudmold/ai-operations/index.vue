@@ -16,6 +16,7 @@ import {
   Button,
   Card,
   Col,
+  Collapse,
   Descriptions,
   DescriptionsItem,
   Drawer,
@@ -38,6 +39,7 @@ import {
 } from '#/api/cloudmold/agent-control';
 import { grantApprover } from '#/api/cloudmold/agent-control/command';
 import {
+  getCloudMoldManagedRunDetail,
   getCloudMoldManagedRunPage,
   getCloudMoldManagedWorkflowList,
   getCloudMoldTemporalScheduleList,
@@ -55,9 +57,6 @@ import {
   approvalGateSummary,
   approvalStatusMeta,
   normalizeManagedWorkflowList,
-  useManagedArtifactColumns,
-  useManagedObservationColumns,
-  useManagedRunColumns,
   useManagedRunFormSchema,
   useManagedWorkflowColumns,
   useManagedWorkflowFormSchema,
@@ -65,7 +64,6 @@ import {
   useTemporalScheduleFormSchema,
   workflowRunStatusMeta,
 } from './data';
-import RunDetailDrawer from './run-detail-drawer.vue';
 
 import '../shared/tabbed-grid.css';
 
@@ -128,10 +126,17 @@ function getMeta(
   metadata: Record<string, { color: string; label: string }>,
   status: null | string | undefined,
 ) {
-  if (!status) {
+  const normalized = normalizeBusinessStatus(status);
+  if (!normalized) {
     return { color: 'default', label: '-' };
   }
-  return metadata[status] ?? { color: 'default', label: status };
+  if (isWaitingStatus(normalized) || normalized === 'PREPARE') {
+    return { color: 'warning', label: '等待中' };
+  }
+  if (normalized === 'PENDING_CONFIRMATION') {
+    return { color: 'processing', label: '等待确认' };
+  }
+  return metadata[normalized] ?? { color: 'default', label: normalized };
 }
 
 function matchFilter(value: null | string | undefined, keyword: unknown) {
@@ -241,16 +246,299 @@ async function operateTemporalSchedule(
 }
 
 const detailOpen = ref(false);
-const detailRunId = ref<null | string>(null);
-const detailSource = ref<CloudMoldAiOperationsApi.RunSource>('telemetry');
+const detailLoading = ref(false);
+const detailData = ref<CloudMoldAiOperationsApi.ManagedRunDetail>();
+const detailError = ref('');
+const detailWorkflowName = ref('');
 
-function openRunDetail(
+function normalizeBusinessStatus(status?: null | string) {
+  return status?.trim().toUpperCase();
+}
+
+function isWaitingStatus(status?: null | string) {
+  return (
+    !!status &&
+    (status.startsWith('WAITING_') ||
+      ['PENDING', 'PENDING_CONFIRMATION', 'PREPARE', 'QUEUED'].includes(status))
+  );
+}
+
+function businessProgressLabel(
+  run: Partial<CloudMoldAiOperationsApi.ManagedRun> & { status?: string },
+) {
+  const status = normalizeBusinessStatus(run.status);
+  if (!status) return '准备中';
+  if (status === 'SUCCEEDED') return '执行完成';
+  if (status === 'RUNNING') return run.currentStepCode || '执行中';
+  if (isWaitingStatus(status)) return '等待中';
+  if (status === 'NEEDS_REVIEW') return '待人工复核';
+  if (status === 'FAILED') return '执行失败';
+  if (status === 'PAUSED') return '已暂停';
+  if (status === 'CANCELLED') return '已取消';
+  return run.currentStepCode || status;
+}
+
+function formatWhen(value?: null | string) {
+  if (!value) return '-';
+  return new Date(value).toLocaleString('zh-CN', { hour12: false });
+}
+
+function runCompletionLabel(run: CloudMoldAiOperationsApi.ManagedRun) {
+  return formatWhen(run.completedAt || run.updatedAt || run.createdAt);
+}
+
+function detailOutcomeHeadline(
+  detail?: CloudMoldAiOperationsApi.ManagedRunDetail,
+) {
+  return (
+    detail?.task.businessOutcome?.headline ||
+    detail?.businessPhases?.find((phase) => phase.businessOutcome?.headline)
+      ?.businessOutcome?.headline ||
+    '业务结果生成中'
+  );
+}
+
+function detailOutcomeSummary(
+  detail?: CloudMoldAiOperationsApi.ManagedRunDetail,
+) {
+  return (
+    detail?.task.businessOutcome?.summary ||
+    detail?.businessPhases?.find((phase) => phase.businessOutcome?.summary)
+      ?.businessOutcome?.summary ||
+    '当前运行尚未沉淀出明确业务结果摘要。'
+  );
+}
+
+function collectBusinessObjects(
+  detail?: CloudMoldAiOperationsApi.ManagedRunDetail,
+) {
+  const map = new Map<string, CloudMoldAiOperationsApi.ManagedBusinessObject>();
+  const push = (item?: CloudMoldAiOperationsApi.ManagedBusinessObject) => {
+    if (!item) return;
+    const key = [
+      item.objectType || '',
+      item.businessId || '',
+      item.businessCode || '',
+      item.label || '',
+    ].join('::');
+    if (!map.has(key)) map.set(key, item);
+  };
+  detail?.task.businessOutcome?.businessObjects?.forEach(push);
+  detail?.businessPhases?.forEach((phase) => {
+    phase.businessOutcome?.businessObjects?.forEach(push);
+    phase.actions?.forEach((action) => action.businessObjects?.forEach(push));
+  });
+  return [...map.values()];
+}
+
+function buildBusinessTimeline(
+  detail?: CloudMoldAiOperationsApi.ManagedRunDetail,
+) {
+  const rows =
+    detail?.businessPhases?.map((phase, index) => ({
+      key: `${phase.phaseCode || 'phase'}-${index}`,
+      title: phase.displayName || phase.phaseCode || `阶段 ${index + 1}`,
+      status: phase.status,
+      description:
+        phase.businessOutcome?.summary ||
+        phase.description ||
+        (phase.actions?.length
+          ? `包含 ${phase.actions.length} 个业务动作`
+          : '等待该阶段沉淀业务结果'),
+      startedAt: phase.startedAt,
+      completedAt: phase.completedAt,
+    })) || [];
+  if (rows.length > 0) return rows;
+  if (!detail?.task) return [];
+  return [
+    {
+      key: detail.task.taskId,
+      title: '当前运行',
+      status: detail.task.status,
+      description: detailOutcomeSummary(detail),
+      startedAt: detail.task.startedAt || detail.task.createdAt,
+      completedAt: detail.task.completedAt,
+    },
+  ];
+}
+
+function buildApprovalResponsibility(
+  detail?: CloudMoldAiOperationsApi.ManagedRunDetail,
+) {
+  const approvalPhase = detail?.businessPhases?.find(
+    (phase) => phase.approvalRequired || isWaitingStatus(phase.approvalStatus),
+  );
+  const waiting = isWaitingStatus(detail?.task.status);
+  return [
+    {
+      label: '风险等级',
+      value: approvalPhase?.riskLevel || detail?.task.riskLevel || '-',
+    },
+    {
+      label: '审批状态',
+      value: approvalPhase
+        ? getMeta(workflowRunStatusMeta, approvalPhase.approvalStatus).label
+        : waiting
+          ? '等待中'
+          : '无需审批',
+    },
+    {
+      label: '责任岗位',
+      value: approvalPhase?.phaseCode
+        ? roleName(approvalPhase.phaseCode) || approvalPhase.phaseCode
+        : '由托管工作流定义',
+    },
+    {
+      label: '当前进度',
+      value: detail?.task ? businessProgressLabel(detail.task) : '-',
+    },
+  ];
+}
+
+async function openRunDetail(
   runId: string,
   source: CloudMoldAiOperationsApi.RunSource,
+  workflowName?: string,
 ) {
-  detailRunId.value = runId;
-  detailSource.value = source;
+  if (source !== 'managed') {
+    return;
+  }
   detailOpen.value = true;
+  detailLoading.value = true;
+  detailError.value = '';
+  detailData.value = undefined;
+  detailWorkflowName.value = workflowName || '';
+  try {
+    detailData.value = await getCloudMoldManagedRunDetail(runId);
+  } catch (error) {
+    detailError.value =
+      error instanceof Error ? error.message : '详情加载失败，请稍后重试';
+  } finally {
+    detailLoading.value = false;
+  }
+}
+
+function managedRunColumns(): VxeTableGridOptions['columns'] {
+  return [
+    {
+      field: 'skillId',
+      fixed: 'left',
+      minWidth: 180,
+      slots: { default: 'managed-run-workflow' },
+      title: '工作流',
+    },
+    {
+      field: 'businessOutcome',
+      minWidth: 320,
+      slots: { default: 'managed-run-outcome' },
+      title: '业务结果',
+    },
+    {
+      field: 'status',
+      minWidth: 100,
+      slots: { default: 'managed-run-status' },
+      title: '状态',
+    },
+    {
+      field: 'currentStepCode',
+      minWidth: 160,
+      slots: { default: 'managed-run-current-step' },
+      title: '进度',
+    },
+    {
+      field: 'completedAt',
+      minWidth: 180,
+      slots: { default: 'managed-run-completed' },
+      title: 'SLA / 完成时间',
+    },
+    {
+      field: 'action',
+      fixed: 'right',
+      minWidth: 72,
+      slots: { default: 'managed-run-action' },
+      title: '操作',
+    },
+  ];
+}
+
+function managedArtifactColumns(): VxeTableGridOptions['columns'] {
+  return [
+    {
+      field: 'skillId',
+      fixed: 'left',
+      minWidth: 180,
+      slots: { default: 'managed-artifact-workflow' },
+      title: '工作流',
+    },
+    {
+      field: 'businessOutcome',
+      minWidth: 360,
+      slots: { default: 'managed-artifact-outcome' },
+      title: '业务结果',
+    },
+    {
+      field: 'status',
+      minWidth: 100,
+      slots: { default: 'managed-artifact-status' },
+      title: '状态',
+    },
+    {
+      field: 'completedAt',
+      minWidth: 180,
+      slots: { default: 'managed-artifact-completed' },
+      title: 'SLA / 完成时间',
+    },
+    {
+      field: 'action',
+      fixed: 'right',
+      minWidth: 72,
+      slots: { default: 'managed-artifact-action' },
+      title: '操作',
+    },
+  ];
+}
+
+function managedObservationColumns(): VxeTableGridOptions['columns'] {
+  return [
+    {
+      field: 'skillId',
+      fixed: 'left',
+      minWidth: 180,
+      slots: { default: 'managed-observation-workflow' },
+      title: '工作流',
+    },
+    {
+      field: 'businessOutcome',
+      minWidth: 320,
+      slots: { default: 'managed-observation-outcome' },
+      title: '业务结果',
+    },
+    {
+      field: 'status',
+      minWidth: 100,
+      slots: { default: 'managed-observation-status' },
+      title: '状态',
+    },
+    {
+      field: 'currentStepCode',
+      minWidth: 160,
+      slots: { default: 'managed-observation-current-step' },
+      title: '进度',
+    },
+    {
+      field: 'updatedAt',
+      minWidth: 180,
+      slots: { default: 'managed-observation-completed' },
+      title: 'SLA / 最近观测',
+    },
+    {
+      field: 'action',
+      fixed: 'right',
+      minWidth: 72,
+      slots: { default: 'managed-observation-action' },
+      title: '操作',
+    },
+  ];
 }
 
 const [ManagedWorkflowGrid] = useVbenVxeGrid({
@@ -309,7 +597,7 @@ const [ManagedRunGrid] = useVbenVxeGrid({
     showCollapseButton: true,
   },
   gridOptions: {
-    columns: useManagedRunColumns(),
+    columns: managedRunColumns(),
     height: 600,
     proxyConfig: {
       ajax: {
@@ -341,7 +629,7 @@ const [ManagedArtifactGrid] = useVbenVxeGrid({
     showCollapseButton: true,
   },
   gridOptions: {
-    columns: useManagedArtifactColumns(),
+    columns: managedArtifactColumns(),
     height: 600,
     proxyConfig: {
       ajax: {
@@ -373,7 +661,7 @@ const [ManagedObservationGrid] = useVbenVxeGrid({
     showCollapseButton: true,
   },
   gridOptions: {
-    columns: useManagedObservationColumns(),
+    columns: managedObservationColumns(),
     height: 600,
     proxyConfig: {
       ajax: {
@@ -741,18 +1029,24 @@ onMounted(() => {
                 {{
                   row.status === 'SUCCEEDED'
                     ? '执行完成'
-                    : row.status === 'WAITING_APPROVAL'
-                      ? '等待 BPM 审批'
-                      : row.currentStepCode || '准备中'
+                    : businessProgressLabel(row)
                 }}
               </span>
+            </template>
+            <template #managed-run-completed="{ row }">
+              {{ runCompletionLabel(row) }}
             </template>
             <template #managed-run-action="{ row }">
               <TableAction
                 :actions="[
                   {
                     label: '详情',
-                    onClick: () => openRunDetail(row.taskId, 'managed'),
+                    onClick: () =>
+                      openRunDetail(
+                        row.taskId,
+                        'managed',
+                        workflowName(row.skillId),
+                      ),
                     type: 'link',
                   },
                 ]"
@@ -799,12 +1093,20 @@ onMounted(() => {
             <template #managed-artifact-status="{ row }">
               <StatusTag v-bind="getMeta(workflowRunStatusMeta, row.status)" />
             </template>
+            <template #managed-artifact-completed="{ row }">
+              {{ runCompletionLabel(row) }}
+            </template>
             <template #managed-artifact-action="{ row }">
               <TableAction
                 :actions="[
                   {
                     label: '详情',
-                    onClick: () => openRunDetail(row.taskId, 'managed'),
+                    onClick: () =>
+                      openRunDetail(
+                        row.taskId,
+                        'managed',
+                        workflowName(row.skillId),
+                      ),
                     type: 'link',
                   },
                 ]"
@@ -974,26 +1276,44 @@ onMounted(() => {
                 {{ workflowName(row.skillId) }}
               </div>
             </template>
+            <template #managed-observation-outcome="{ row }">
+              <div class="min-w-0 py-1">
+                <div class="truncate font-medium text-foreground">
+                  {{ row.businessOutcome?.headline || '业务结果生成中' }}
+                </div>
+                <div class="truncate text-xs text-muted-foreground">
+                  {{
+                    row.businessOutcome?.summary || '等待业务阶段沉淀结果摘要'
+                  }}
+                </div>
+              </div>
+            </template>
             <template #managed-observation-current-step="{ row }">
               <span class="truncate" :title="row.currentStepCode">
                 {{
                   row.status === 'SUCCEEDED'
                     ? '全部阶段完成'
-                    : row.status === 'WAITING_APPROVAL'
-                      ? '等待 BPM 审批'
-                      : row.currentStepCode || '准备中'
+                    : businessProgressLabel(row)
                 }}
               </span>
             </template>
             <template #managed-observation-status="{ row }">
               <StatusTag v-bind="getMeta(workflowRunStatusMeta, row.status)" />
             </template>
+            <template #managed-observation-completed="{ row }">
+              {{ runCompletionLabel(row) }}
+            </template>
             <template #managed-observation-action="{ row }">
               <TableAction
                 :actions="[
                   {
                     label: '详情',
-                    onClick: () => openRunDetail(row.taskId, 'managed'),
+                    onClick: () =>
+                      openRunDetail(
+                        row.taskId,
+                        'managed',
+                        workflowName(row.skillId),
+                      ),
                     type: 'link',
                   },
                 ]"
@@ -1004,11 +1324,154 @@ onMounted(() => {
       </Tabs.TabPane>
     </Tabs>
 
-    <RunDetailDrawer
+    <Drawer
       v-model:open="detailOpen"
-      :run-id="detailRunId"
-      :source="detailSource"
-    />
+      :title="detailWorkflowName || detailOutcomeHeadline(detailData)"
+      width="760"
+    >
+      <div class="flex flex-col gap-4">
+        <Alert
+          v-if="detailError"
+          type="error"
+          show-icon
+          :message="detailError"
+        />
+        <template v-else-if="detailData">
+          <Card size="small" title="业务结果">
+            <Space direction="vertical" class="w-full" :size="8">
+              <Typography.Title :level="5" class="mb-0">
+                {{ detailOutcomeHeadline(detailData) }}
+              </Typography.Title>
+              <Typography.Paragraph class="mb-0 text-sm text-muted-foreground">
+                {{ detailOutcomeSummary(detailData) }}
+              </Typography.Paragraph>
+              <Space
+                v-if="detailData.task.businessOutcome?.metrics?.length"
+                wrap
+                :size="[8, 8]"
+              >
+                <StatusTag
+                  v-for="metric in detailData.task.businessOutcome?.metrics"
+                  :key="`${metric.label}-${metric.value}`"
+                  color="processing"
+                  :label="`${metric.label}：${metric.value}`"
+                />
+              </Space>
+            </Space>
+          </Card>
+
+          <Card size="small" title="业务时间线">
+            <div
+              v-for="phase in buildBusinessTimeline(detailData)"
+              :key="phase.key"
+              class="border-b border-border py-3 last:border-b-0"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <Space>
+                  <Typography.Text strong>{{ phase.title }}</Typography.Text>
+                  <StatusTag
+                    v-bind="getMeta(workflowRunStatusMeta, phase.status)"
+                  />
+                </Space>
+                <Typography.Text type="secondary">
+                  {{ formatWhen(phase.completedAt || phase.startedAt) }}
+                </Typography.Text>
+              </div>
+              <Typography.Paragraph
+                class="mb-0 mt-2 text-sm text-muted-foreground"
+              >
+                {{ phase.description }}
+              </Typography.Paragraph>
+            </div>
+          </Card>
+
+          <Card size="small" title="审批与责任">
+            <Descriptions :column="2" bordered size="small">
+              <DescriptionsItem
+                v-for="item in buildApprovalResponsibility(detailData)"
+                :key="item.label"
+                :label="item.label"
+              >
+                {{ item.value }}
+              </DescriptionsItem>
+            </Descriptions>
+          </Card>
+
+          <Card size="small" title="业务对象">
+            <Empty
+              v-if="!collectBusinessObjects(detailData).length"
+              description="当前尚未沉淀明确业务对象"
+            />
+            <Descriptions v-else :column="1" bordered size="small">
+              <DescriptionsItem
+                v-for="(item, index) in collectBusinessObjects(detailData)"
+                :key="`${item.objectType}-${item.businessId || item.businessCode || index}`"
+                :label="item.label"
+              >
+                <Space wrap>
+                  <StatusTag color="default" :label="item.objectType" />
+                  <Typography.Text>
+                    {{ item.businessCode || item.businessId || '待生成编号' }}
+                  </Typography.Text>
+                  <StatusTag
+                    v-if="item.status"
+                    v-bind="getMeta(workflowRunStatusMeta, item.status)"
+                  />
+                </Space>
+              </DescriptionsItem>
+            </Descriptions>
+          </Card>
+
+          <Collapse>
+            <Collapse.Panel key="evidence" header="技术证据（默认折叠）">
+              <Descriptions :column="1" bordered size="small">
+                <DescriptionsItem label="任务 ID">
+                  {{ detailData.task.taskId }}
+                </DescriptionsItem>
+                <DescriptionsItem label="运行 ID">
+                  {{ detailData.task.runId || '-' }}
+                </DescriptionsItem>
+                <DescriptionsItem label="输入哈希">
+                  {{ detailData.task.inputSha256 }}
+                </DescriptionsItem>
+                <DescriptionsItem label="定义哈希">
+                  {{ detailData.task.definitionSha256 }}
+                </DescriptionsItem>
+                <DescriptionsItem label="终态哈希">
+                  {{ detailData.task.terminalResultSha256 || '-' }}
+                </DescriptionsItem>
+              </Descriptions>
+              <div class="mt-3 space-y-2">
+                <div
+                  v-for="step in detailData.steps"
+                  :key="`${step.taskId}-${step.stepCode}`"
+                  class="rounded border border-border px-3 py-2"
+                >
+                  <div class="flex items-center justify-between gap-3">
+                    <Typography.Text strong>
+                      {{ step.displayName || step.stepCode }}
+                    </Typography.Text>
+                    <StatusTag
+                      v-bind="getMeta(workflowRunStatusMeta, step.status)"
+                    />
+                  </div>
+                  <Typography.Paragraph
+                    class="mb-0 mt-1 text-xs text-muted-foreground"
+                  >
+                    {{
+                      step.resultSummary ||
+                      step.resultSha256 ||
+                      '暂无额外技术摘要'
+                    }}
+                  </Typography.Paragraph>
+                </div>
+              </div>
+            </Collapse.Panel>
+          </Collapse>
+        </template>
+        <Empty v-else-if="!detailLoading" description="暂无详情数据" />
+      </div>
+    </Drawer>
 
     <Modal
       v-model:open="approvalAssignOpen"

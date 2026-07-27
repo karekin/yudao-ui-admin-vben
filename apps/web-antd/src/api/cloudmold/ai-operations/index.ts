@@ -49,6 +49,7 @@ export namespace CloudMoldAiOperationsApi {
 
   export interface ManagedRun {
     attemptCount: number;
+    approvalGate?: ApprovalGateState;
     businessOutcome?: ManagedBusinessOutcome;
     completedAt?: string;
     createdAt: string;
@@ -65,6 +66,7 @@ export namespace CloudMoldAiOperationsApi {
     skillVersion: string;
     startedAt?: string;
     status: string;
+    statusHistory?: StatusHistory[];
     taskId: string;
     terminalResultSha256?: string;
     updatedAt: string;
@@ -253,7 +255,9 @@ export namespace CloudMoldAiOperationsApi {
   }
 
   export interface ManagedRunDetail {
+    approvalGate?: ApprovalGateState;
     businessPhases?: ManagedBusinessPhase[];
+    statusHistory?: StatusHistory[];
     steps: ManagedRunStep[];
     task: ManagedRun;
   }
