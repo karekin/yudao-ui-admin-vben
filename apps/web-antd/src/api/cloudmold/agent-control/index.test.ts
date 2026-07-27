@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isAgentControlUnavailable } from './index';
+import { isAgentControlForbidden, isAgentControlUnavailable } from './index';
 
 describe('isAgentControlUnavailable', () => {
   it.each([
@@ -19,5 +19,25 @@ describe('isAgentControlUnavailable', () => {
     { response: { status: 503 } },
   ])('does not hide other failures', (error) => {
     expect(isAgentControlUnavailable(error)).toBe(false);
+  });
+});
+
+describe('isAgentControlForbidden', () => {
+  it.each([
+    { code: 403 },
+    { data: { code: 403 } },
+    { response: { data: { code: 403 } } },
+    { response: { status: 403 } },
+  ])('recognizes an optional endpoint without user permission', (error) => {
+    expect(isAgentControlForbidden(error)).toBe(true);
+  });
+
+  it.each([
+    undefined,
+    new Error('network failure'),
+    { data: { code: 404 } },
+    { response: { status: 503 } },
+  ])('does not hide unrelated failures', (error) => {
+    expect(isAgentControlForbidden(error)).toBe(false);
   });
 });

@@ -9,18 +9,23 @@ export namespace CloudMoldAgentControlApi {
 
   export interface BusinessCard {
     actionCode: string;
+    approverUserId?: number;
     cardId: string;
     cardType: CardType;
     fromRoleCode?: string;
     missionId?: string;
     occurredAt: string;
     outcomeCode?: string;
+    processInstanceId?: string;
+    requesterUserId?: number;
     riskLevel: string;
     roleCode: string;
+    scopeHash?: string;
     status: string;
     summary?: string;
     title: string;
     workOrderId: string;
+    workflowStatus?: string;
   }
 
   export interface BusinessCardParams {
@@ -28,6 +33,26 @@ export namespace CloudMoldAgentControlApi {
     limit?: number;
     roleCode?: string;
     status?: string;
+  }
+
+  export interface ApprovalDetail {
+    actionCode: string;
+    approvalId: string;
+    approverUserId?: number;
+    businessContextJson?: string;
+    processInstanceId?: string;
+    reasonCode?: string;
+    requestedAt: string;
+    requesterUserId?: number;
+    riskLevel: string;
+    roleCode: string;
+    scopeHash?: string;
+    skillId?: string;
+    skillVersion?: string;
+    status: string;
+    title: string;
+    workOrderId: string;
+    workflowStatus?: string;
   }
 
   /** 岗位角色授予记录（对齐后端 ActorRoleGrantView） */
@@ -61,6 +86,13 @@ export function getCloudMoldAgentBusinessCards(
   );
 }
 
+export function getCloudMoldAgentApprovalDetail(approvalId: string) {
+  return requestClient.get<CloudMoldAgentControlApi.ApprovalDetail>(
+    `/cloudmold/agent-control/approvals/${encodeURIComponent(approvalId)}/detail`,
+    { headers: OPTIONAL_FEATURE_HEADERS },
+  );
+}
+
 /** 查询岗位角色授予记录（管理员治理只读，权限 cloudmold:agent-control:govern） */
 export function getCloudMoldAgentRoleGrants(
   params: CloudMoldAgentControlApi.RoleGrantParams,
@@ -85,5 +117,22 @@ export function isAgentControlUnavailable(error: unknown): boolean {
     candidate.data?.code === 404 ||
     candidate.response?.data?.code === 404 ||
     candidate.response?.status === 404
+  );
+}
+
+export function isAgentControlForbidden(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const candidate = error as {
+    code?: number;
+    data?: { code?: number };
+    response?: { data?: { code?: number }; status?: number };
+  };
+  return (
+    candidate.code === 403 ||
+    candidate.data?.code === 403 ||
+    candidate.response?.data?.code === 403 ||
+    candidate.response?.status === 403
   );
 }

@@ -10,6 +10,7 @@ import { requestClient } from '#/api/request';
 
 /** 岗位角色授予治理 operation（对齐后端 AgentAuthorityOperation） */
 export const AgentAuthorityOperation = {
+  GRANT_APPROVER: 'GRANT_APPROVER',
   GRANT_ROLE: 'GRANT_ROLE',
   REVOKE_ROLE: 'REVOKE_ROLE',
 } as const;
@@ -59,5 +60,31 @@ export function revokeRole(
   return sendGovernanceCommand({
     operation: AgentAuthorityOperation.REVOKE_ROLE,
     roleGrant: { actorUserId, expectedVersion, grantId, roleCode },
+  });
+}
+
+/** 为单次审批指定审批人；服务端会校验岗位、动作、风险和 scopeHash 与冻结快照完全一致。 */
+export function grantApprover(
+  approverUserId: number,
+  approvalId: string,
+  roleCode: string,
+  actionCode: string,
+  riskLevel: string,
+  scopeHash: string,
+  validFrom: string,
+  validUntil: string,
+) {
+  return sendGovernanceCommand({
+    approvalGrant: {
+      actionCode,
+      approvalId,
+      approverUserId,
+      riskLevel,
+      roleCode,
+      scopeHash,
+      validFrom,
+      validUntil,
+    },
+    operation: AgentAuthorityOperation.GRANT_APPROVER,
   });
 }

@@ -74,6 +74,14 @@ describe('cloudmold administration navigation', () => {
     ).toBe(true);
   });
 
+  it('provides a hidden route for the Agent approval form template', () => {
+    const route = childByName(root, 'CloudMoldAgentApprovalForm');
+
+    expect(route?.path).toBe('agent-control/approval-form');
+    expect(route?.meta?.hideInMenu).toBe(true);
+    expect(route?.meta?.authority).toEqual(['cloudmold:agent-control:query']);
+  });
+
   it('redirects old bookmarks to the grouped routes', () => {
     expect(childByName(root, 'CloudMoldLegacyCatalogRedirect')?.redirect).toBe(
       '/cloudmold/product-center/products',
@@ -143,9 +151,9 @@ describe('cloudmold administration navigation', () => {
     expect(groupedPageCount).toBe(11);
     expect(directOperationsPageCount).toBe(12);
     expect(operationsRoot.meta?.hideInMenu).toBe(true);
-    expect(hiddenDirectPageCount).toBe(3);
+    expect(hiddenDirectPageCount).toBe(4);
     expect(
       groupedPageCount! + directOperationsPageCount! + hiddenDirectPageCount!,
-    ).toBe(26);
+    ).toBe(27);
   });
 });

@@ -208,6 +208,20 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'agent-control/approval-form',
+        name: 'CloudMoldAgentApprovalForm',
+        component: () =>
+          import('#/views/cloudmold/agent-control/approval-form.vue'),
+        props: (route) => ({
+          id: route.query.id,
+        }),
+        meta: {
+          title: 'Agent 审批表单',
+          hideInMenu: true,
+          authority: ['cloudmold:agent-control:query'],
+        },
+      },
+      {
         path: 'catalog',
         name: 'CloudMoldLegacyCatalogRedirect',
         redirect: '/cloudmold/product-center/products',

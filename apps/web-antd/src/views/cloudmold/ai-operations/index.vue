@@ -1,64 +1,1076 @@
 <script lang="ts" setup>
+import type { PageResult } from '@vben/request';
+
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
+import type { CloudMoldAgentControlApi } from '#/api/cloudmold/agent-control';
 import type { CloudMoldAiOperationsApi } from '#/api/cloudmold/ai-operations';
 
-import { Page } from '@vben/common-ui';
+import { onMounted, ref, watch } from 'vue';
 
-import { useVbenVxeGrid } from '#/adapter/vxe-table';
-import { getCloudMoldAiWorkflowRunPage } from '#/api/cloudmold/ai-operations';
+import { useAccess } from '@vben/access';
+import { Page } from '@vben/common-ui';
+import { useUserStore } from '@vben/stores';
+
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Descriptions,
+  DescriptionsItem,
+  Drawer,
+  Empty,
+  InputNumber,
+  message,
+  Modal,
+  Row,
+  Select,
+  Space,
+  Tabs,
+  Typography,
+} from 'ant-design-vue';
+
+import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
+import {
+  getCloudMoldAgentBusinessCards,
+  isAgentControlForbidden,
+  isAgentControlUnavailable,
+} from '#/api/cloudmold/agent-control';
+import { grantApprover } from '#/api/cloudmold/agent-control/command';
+import {
+  getCloudMoldManagedRunPage,
+  getCloudMoldManagedWorkflowList,
+  getCloudMoldTemporalScheduleList,
+  pauseCloudMoldTemporalSchedule,
+  resumeCloudMoldTemporalSchedule,
+  triggerCloudMoldTemporalSchedule,
+} from '#/api/cloudmold/ai-operations';
+import { router } from '#/router';
 
 import CopyIdCell from '../shared/copy-id-cell.vue';
 import EvidenceAlert from '../shared/evidence-alert.vue';
 import StatusTag from '../shared/status-tag.vue';
 import {
-  useAiWorkflowRunColumns,
-  useAiWorkflowRunFormSchema,
+  aiOperationsConsoleNotice,
+  approvalGateSummary,
+  approvalStatusMeta,
+  normalizeManagedWorkflowList,
+  useManagedArtifactColumns,
+  useManagedObservationColumns,
+  useManagedRunColumns,
+  useManagedRunFormSchema,
+  useManagedWorkflowColumns,
+  useManagedWorkflowFormSchema,
+  useTemporalScheduleColumns,
+  useTemporalScheduleFormSchema,
   workflowRunStatusMeta,
 } from './data';
+import RunDetailDrawer from './run-detail-drawer.vue';
+
+import '../shared/tabbed-grid.css';
 
 defineOptions({ name: 'CloudMoldAiWorkflowRun' });
 
-type StatusMeta = Record<string, { color: string; label: string }>;
+type SectionFlags = {
+  loadFailed: boolean;
+  unavailable: boolean;
+};
 
-function getMeta(metadata: StatusMeta, status: string) {
+function isEndpointUnavailable(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+  const candidate = error as {
+    code?: number;
+    data?: { code?: number };
+    response?: { data?: { code?: number }; status?: number };
+  };
+  return (
+    candidate.code === 404 ||
+    candidate.data?.code === 404 ||
+    candidate.response?.data?.code === 404 ||
+    candidate.response?.status === 404
+  );
+}
+
+function emptyPage<T>(currentPage: number, pageSize: number): PageResult<T> {
+  void currentPage;
+  void pageSize;
+  return {
+    list: [],
+    total: 0,
+  };
+}
+
+function paginateItems<T>(
+  items: T[],
+  currentPage: number,
+  pageSize: number,
+): PageResult<T> {
+  const start = (currentPage - 1) * pageSize;
+  return {
+    list: items.slice(start, start + pageSize),
+    total: items.length,
+  };
+}
+
+function resetFlags(flags: SectionFlags) {
+  flags.loadFailed = false;
+  flags.unavailable = false;
+}
+
+function applyFailure(flags: SectionFlags, error: unknown) {
+  flags.unavailable = isEndpointUnavailable(error);
+  flags.loadFailed = !flags.unavailable;
+}
+
+function getMeta(
+  metadata: Record<string, { color: string; label: string }>,
+  status: null | string | undefined,
+) {
+  if (!status) {
+    return { color: 'default', label: '-' };
+  }
   return metadata[status] ?? { color: 'default', label: status };
 }
 
-const [Grid] = useVbenVxeGrid({
-  formOptions: { schema: useAiWorkflowRunFormSchema() },
+function matchFilter(value: null | string | undefined, keyword: unknown) {
+  if (!keyword) {
+    return true;
+  }
+  return String(value ?? '')
+    .toLowerCase()
+    .includes(String(keyword).trim().toLowerCase());
+}
+
+const activeTab = ref('managed-workflows');
+const { hasAccessByCodes } = useAccess();
+const userStore = useUserStore();
+
+const managedWorkflowFlags = ref<SectionFlags>({
+  loadFailed: false,
+  unavailable: false,
+});
+const managedRunFlags = ref<SectionFlags>({
+  loadFailed: false,
+  unavailable: false,
+});
+const managedArtifactFlags = ref<SectionFlags>({
+  loadFailed: false,
+  unavailable: false,
+});
+const managedObservationFlags = ref<SectionFlags>({
+  loadFailed: false,
+  unavailable: false,
+});
+const temporalScheduleFlags = ref<SectionFlags>({
+  loadFailed: false,
+  unavailable: false,
+});
+
+const workflowDetailOpen = ref(false);
+const selectedWorkflow = ref<CloudMoldAiOperationsApi.ManagedWorkflow>();
+const managedWorkflowNames = ref<Record<string, string>>({});
+
+function workflowName(skillId?: string) {
+  if (!skillId) return '未识别工作流';
+  return managedWorkflowNames.value[skillId] ?? skillId;
+}
+
+function openWorkflowDetail(
+  workflow: CloudMoldAiOperationsApi.ManagedWorkflow,
+) {
+  selectedWorkflow.value = workflow;
+  workflowDetailOpen.value = true;
+}
+
+const [TemporalScheduleGrid, temporalScheduleGridApi] = useVbenVxeGrid({
+  formOptions: {
+    collapsed: true,
+    collapsedRows: 1,
+    schema: useTemporalScheduleFormSchema(),
+    showCollapseButton: true,
+  },
   gridOptions: {
-    columns: useAiWorkflowRunColumns(),
-    height: 'auto',
+    columns: useTemporalScheduleColumns(),
+    height: 600,
     proxyConfig: {
       ajax: {
-        query: async ({ page }, formValues) =>
-          await getCloudMoldAiWorkflowRunPage({
-            pageNo: page.currentPage,
-            pageSize: page.pageSize,
-            ...formValues,
-          }),
+        query: async ({ page }, formValues) => {
+          resetFlags(temporalScheduleFlags.value);
+          try {
+            const schedules = await getCloudMoldTemporalScheduleList();
+            const items = schedules.filter(
+              (item) =>
+                matchFilter(item.scheduleId, formValues.scheduleId) &&
+                matchFilter(item.skillId, formValues.skillId) &&
+                matchFilter(item.status, formValues.status),
+            );
+            return paginateItems(items, page.currentPage, page.pageSize);
+          } catch (error) {
+            applyFailure(temporalScheduleFlags.value, error);
+            return emptyPage(page.currentPage, page.pageSize);
+          }
+        },
       },
     },
-    rowConfig: { isHover: true, keyField: 'runId' },
+    rowConfig: { height: 58, isHover: true, keyField: 'scheduleId' },
     toolbarConfig: { refresh: true, search: true },
-  } as VxeTableGridOptions<CloudMoldAiOperationsApi.WorkflowRun>,
+  } as VxeTableGridOptions<CloudMoldAiOperationsApi.TemporalSchedule>,
+});
+
+async function operateTemporalSchedule(
+  action: 'pause' | 'resume' | 'trigger',
+  scheduleId: string,
+) {
+  if (action === 'pause') {
+    await pauseCloudMoldTemporalSchedule(scheduleId);
+  } else if (action === 'resume') {
+    await resumeCloudMoldTemporalSchedule(scheduleId);
+  } else {
+    await triggerCloudMoldTemporalSchedule(scheduleId);
+  }
+  message.success(
+    action === 'trigger'
+      ? '已立即触发'
+      : action === 'pause'
+        ? '已暂停'
+        : '已恢复',
+  );
+  temporalScheduleGridApi.query();
+}
+
+const detailOpen = ref(false);
+const detailRunId = ref<null | string>(null);
+const detailSource = ref<CloudMoldAiOperationsApi.RunSource>('telemetry');
+
+function openRunDetail(
+  runId: string,
+  source: CloudMoldAiOperationsApi.RunSource,
+) {
+  detailRunId.value = runId;
+  detailSource.value = source;
+  detailOpen.value = true;
+}
+
+const [ManagedWorkflowGrid] = useVbenVxeGrid({
+  formOptions: {
+    collapsed: true,
+    collapsedRows: 1,
+    schema: useManagedWorkflowFormSchema(),
+    showCollapseButton: true,
+  },
+  gridOptions: {
+    columns: useManagedWorkflowColumns(),
+    height: 600,
+    proxyConfig: {
+      ajax: {
+        query: async ({ page }, formValues) => {
+          resetFlags(managedWorkflowFlags.value);
+          try {
+            const items = normalizeManagedWorkflowList(
+              await getCloudMoldManagedWorkflowList(),
+            );
+            managedWorkflowNames.value = Object.fromEntries(
+              items.map((item) => [item.skillId, item.displayName]),
+            );
+            const filteredItems = items.filter((item) => {
+              return (
+                matchFilter(item.skillId, formValues.skillId) &&
+                matchFilter(item.riskLevel, formValues.riskLevel)
+              );
+            });
+            return paginateItems(
+              filteredItems,
+              page.currentPage,
+              page.pageSize,
+            );
+          } catch (error) {
+            applyFailure(managedWorkflowFlags.value, error);
+            return emptyPage(page.currentPage, page.pageSize);
+          }
+        },
+      },
+    },
+    rowConfig: {
+      height: 58,
+      isHover: true,
+      keyField: 'definitionClosureSha256',
+    },
+    toolbarConfig: { refresh: true, search: true },
+  } as VxeTableGridOptions<CloudMoldAiOperationsApi.ManagedWorkflow>,
+});
+
+const [ManagedRunGrid] = useVbenVxeGrid({
+  formOptions: {
+    collapsed: true,
+    collapsedRows: 1,
+    schema: useManagedRunFormSchema(),
+    showCollapseButton: true,
+  },
+  gridOptions: {
+    columns: useManagedRunColumns(),
+    height: 600,
+    proxyConfig: {
+      ajax: {
+        query: async ({ page }, formValues) => {
+          resetFlags(managedRunFlags.value);
+          try {
+            return await getCloudMoldManagedRunPage({
+              pageNo: page.currentPage,
+              pageSize: page.pageSize,
+              ...formValues,
+            });
+          } catch (error) {
+            applyFailure(managedRunFlags.value, error);
+            return emptyPage(page.currentPage, page.pageSize);
+          }
+        },
+      },
+    },
+    rowConfig: { height: 58, isHover: true, keyField: 'taskId' },
+    toolbarConfig: { refresh: true, search: true },
+  } as VxeTableGridOptions<CloudMoldAiOperationsApi.ManagedRun>,
+});
+
+const [ManagedArtifactGrid] = useVbenVxeGrid({
+  formOptions: {
+    collapsed: true,
+    collapsedRows: 1,
+    schema: useManagedRunFormSchema(),
+    showCollapseButton: true,
+  },
+  gridOptions: {
+    columns: useManagedArtifactColumns(),
+    height: 600,
+    proxyConfig: {
+      ajax: {
+        query: async ({ page }, formValues) => {
+          resetFlags(managedArtifactFlags.value);
+          try {
+            return await getCloudMoldManagedRunPage({
+              pageNo: page.currentPage,
+              pageSize: page.pageSize,
+              ...formValues,
+            });
+          } catch (error) {
+            applyFailure(managedArtifactFlags.value, error);
+            return emptyPage(page.currentPage, page.pageSize);
+          }
+        },
+      },
+    },
+    rowConfig: { height: 64, isHover: true, keyField: 'taskId' },
+    toolbarConfig: { refresh: true, search: true },
+  } as VxeTableGridOptions<CloudMoldAiOperationsApi.ManagedRun>,
+});
+
+const [ManagedObservationGrid] = useVbenVxeGrid({
+  formOptions: {
+    collapsed: true,
+    collapsedRows: 1,
+    schema: useManagedRunFormSchema(),
+    showCollapseButton: true,
+  },
+  gridOptions: {
+    columns: useManagedObservationColumns(),
+    height: 600,
+    proxyConfig: {
+      ajax: {
+        query: async ({ page }, formValues) => {
+          resetFlags(managedObservationFlags.value);
+          try {
+            return await getCloudMoldManagedRunPage({
+              pageNo: page.currentPage,
+              pageSize: page.pageSize,
+              ...formValues,
+            });
+          } catch (error) {
+            applyFailure(managedObservationFlags.value, error);
+            return emptyPage(page.currentPage, page.pageSize);
+          }
+        },
+      },
+    },
+    rowConfig: { height: 58, isHover: true, keyField: 'taskId' },
+    toolbarConfig: { refresh: true, search: true },
+  } as VxeTableGridOptions<CloudMoldAiOperationsApi.ManagedRun>,
+});
+
+const cards = ref<CloudMoldAgentControlApi.BusinessCard[]>([]);
+const cardsLoading = ref(false);
+const cardsLoaded = ref(false);
+const cardsLoadFailed = ref(false);
+const cardsUnavailable = ref(false);
+const cardsUnauthorized = ref(false);
+const roleCode = ref<string>();
+const cardType = ref<CloudMoldAgentControlApi.CardType>('APPROVAL');
+const approvalAssignOpen = ref(false);
+const approvalAssigning = ref(false);
+const approvalAssigneeUserId = ref<number>();
+const selectedApprovalCard = ref<CloudMoldAgentControlApi.BusinessCard>();
+
+const roleOptions = [
+  { label: '全部岗位', value: undefined },
+  { label: '库控', value: 'inventory-control' },
+  { label: '买手', value: 'buyer' },
+  { label: '客服', value: 'customer-service' },
+  { label: '企划', value: 'planning' },
+  { label: '招商', value: 'merchant-acquisition' },
+];
+
+const typeOptions = [
+  { label: '待审批', value: 'APPROVAL' },
+  { label: '岗位交接', value: 'HANDOFF' },
+  { label: '业务结果', value: 'RESULT' },
+];
+
+const roleNames: Record<string, string> = {
+  buyer: '买手',
+  'customer-service': '客服',
+  'inventory-control': '库控',
+  'merchant-acquisition': '招商',
+  merchandising: '商品运营',
+  planning: '企划',
+};
+
+const statusNames: Record<string, string> = {
+  ACCEPTED: '已接单',
+  APPROVED: '已批准',
+  COMPLETED: '已完成',
+  PENDING: '待处理',
+  REJECTED: '已拒绝',
+};
+
+function roleName(code?: string) {
+  return code ? (roleNames[code] ?? code) : '-';
+}
+
+function statusColor(status: string) {
+  if (['ACCEPTED', 'APPROVED', 'COMPLETED'].includes(status)) return 'green';
+  if (status === 'PENDING') return 'gold';
+  if (status === 'REJECTED') return 'red';
+  return 'blue';
+}
+
+function formatTime(value?: string) {
+  if (!value) return '-';
+  return new Date(value).toLocaleString('zh-CN', { hour12: false });
+}
+
+function approvalWorkflowSummary(item: CloudMoldAgentControlApi.BusinessCard) {
+  if (item.processInstanceId || item.workflowStatus === 'RUNNING') {
+    return `已进入工作流程，等待审批员 ${item.approverUserId ?? ''} 办理`;
+  }
+  if (item.workflowStatus === 'START_REQUESTED') {
+    return '等待治理员指定本次审批人';
+  }
+  if (item.workflowStatus === 'BPM_APPROVED_PENDING_ATTESTATION') {
+    return 'BPM 已通过，正在完成安全确认';
+  }
+  return approvalGateSummary(item.status);
+}
+
+function openApproval(item: CloudMoldAgentControlApi.BusinessCard) {
+  if (!item.processInstanceId) return;
+  router.push({
+    name: 'BpmProcessInstanceDetail',
+    query: { id: item.processInstanceId },
+  });
+}
+
+function openApprovalAssignment(item: CloudMoldAgentControlApi.BusinessCard) {
+  selectedApprovalCard.value = item;
+  approvalAssigneeUserId.value = undefined;
+  approvalAssignOpen.value = true;
+}
+
+async function confirmApprovalAssignment() {
+  const item = selectedApprovalCard.value;
+  if (!item || !approvalAssigneeUserId.value) {
+    message.warning('请输入审批员用户 ID');
+    return;
+  }
+  if (!item.scopeHash) {
+    message.error('审批冻结范围缺失，不能指定审批人');
+    return;
+  }
+  approvalAssigning.value = true;
+  try {
+    await grantApprover(
+      approvalAssigneeUserId.value,
+      item.cardId,
+      item.roleCode,
+      item.actionCode,
+      item.riskLevel,
+      item.scopeHash,
+      new Date(Date.now() - 60_000).toISOString(),
+      new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
+    );
+    message.success('审批人已指定，工作流程待办正在生成');
+    approvalAssignOpen.value = false;
+    window.setTimeout(loadApprovalCards, 2500);
+  } catch (error) {
+    message.error(
+      `指定失败：${error instanceof Error ? error.message : '请稍后重试'}`,
+    );
+  } finally {
+    approvalAssigning.value = false;
+  }
+}
+
+async function loadApprovalCards() {
+  if (!hasAccessByCodes(['cloudmold:agent-control:query'])) {
+    cards.value = [];
+    cardsLoadFailed.value = false;
+    cardsUnavailable.value = false;
+    cardsUnauthorized.value = true;
+    cardsLoading.value = false;
+    cardsLoaded.value = true;
+    return;
+  }
+  cardsLoading.value = true;
+  try {
+    cards.value = await getCloudMoldAgentBusinessCards({
+      cardType: cardType.value,
+      limit: 6,
+      roleCode: roleCode.value,
+      status: 'PENDING',
+    });
+    cardsLoadFailed.value = false;
+    cardsUnavailable.value = false;
+    cardsUnauthorized.value = false;
+  } catch (error) {
+    cards.value = [];
+    cardsUnauthorized.value = isAgentControlForbidden(error);
+    cardsUnavailable.value =
+      isAgentControlUnavailable(error) || isEndpointUnavailable(error);
+    cardsLoadFailed.value = !cardsUnauthorized.value && !cardsUnavailable.value;
+  } finally {
+    cardsLoading.value = false;
+    cardsLoaded.value = true;
+  }
+}
+
+watch(activeTab, (tab) => {
+  if (tab === 'observations-approval' && !cardsLoaded.value) {
+    loadApprovalCards();
+  }
+});
+
+onMounted(() => {
+  if (activeTab.value === 'observations-approval') {
+    loadApprovalCards();
+  }
 });
 </script>
 
 <template>
-  <Page auto-content-height>
+  <Page auto-content-height content-class="flex min-h-0 flex-col">
     <EvidenceAlert
-      message="CloudMold 规范 AI 工作流运行权威"
-      description="本页只读取 CloudMold AI Operations 工作流运行表；调用明细、反馈与定义彼此分离，不读取 yudao Infra 业务表。"
+      message="AI 运营控制台"
+      :description="aiOperationsConsoleNotice"
     />
 
-    <Grid table-title="规范 AI 工作流运行">
-      <template #run-id="{ row }">
-        <CopyIdCell :value="row.runId" label="运行 ID" />
-      </template>
-      <template #status="{ row }">
-        <StatusTag v-bind="getMeta(workflowRunStatusMeta, row.status)" />
-      </template>
-    </Grid>
+    <Tabs
+      v-model:active-key="activeTab"
+      class="cloudmold-grid-tabs min-h-0 w-full flex-1"
+    >
+      <Tabs.TabPane key="temporal-schedules" tab="定时任务">
+        <div class="flex min-h-0 flex-col gap-4">
+          <Alert
+            type="info"
+            show-icon
+            message="Temporal 是定时与恢复权威"
+            description="后台管理系统负责创建、暂停、恢复和立即触发；DeerFlow 负责编排。R2/R3 每次触发都会创建新的 BPM 审批，审批通过后回调并恢复对应的 Temporal 运行。"
+          />
+          <Alert
+            v-if="temporalScheduleFlags.unavailable"
+            type="warning"
+            show-icon
+            message="Temporal 调度能力尚未启用"
+            description="启用后可在此查看自动铺品等定时工作流、上次/下次触发时间和暂停状态。"
+          />
+          <Alert
+            v-else-if="temporalScheduleFlags.loadFailed"
+            type="error"
+            show-icon
+            message="Temporal 定时任务加载失败"
+            description="请检查 Temporal 服务和后端连接状态后重试。"
+          />
+          <TemporalScheduleGrid table-title="Temporal 定时任务">
+            <template #temporal-name="{ row }">
+              <div class="min-w-0 py-1">
+                <div class="truncate font-medium text-foreground">
+                  {{ row.displayName }}
+                </div>
+                <div class="truncate text-xs text-muted-foreground">
+                  {{ row.description }}
+                </div>
+              </div>
+            </template>
+            <template #temporal-workflow="{ row }">
+              <div class="truncate" :title="row.skillId">
+                {{ workflowName(row.skillId) }}
+              </div>
+            </template>
+            <template #temporal-interval="{ row }">
+              {{
+                row.intervalSeconds === 3600
+                  ? '每小时'
+                  : `${row.intervalSeconds} 秒`
+              }}
+            </template>
+            <template #temporal-status="{ row }">
+              <StatusTag
+                v-bind="
+                  row.paused
+                    ? { color: 'warning', label: '已暂停' }
+                    : { color: 'success', label: '运行中' }
+                "
+              />
+            </template>
+            <template #temporal-action="{ row }">
+              <TableAction
+                :actions="[
+                  {
+                    label: '立即触发',
+                    onClick: () =>
+                      operateTemporalSchedule('trigger', row.scheduleId),
+                    type: 'link',
+                  },
+                  {
+                    label: row.paused ? '恢复' : '暂停',
+                    onClick: () =>
+                      operateTemporalSchedule(
+                        row.paused ? 'resume' : 'pause',
+                        row.scheduleId,
+                      ),
+                    type: 'link',
+                  },
+                ]"
+              />
+            </template>
+          </TemporalScheduleGrid>
+        </div>
+      </Tabs.TabPane>
+
+      <Tabs.TabPane key="managed-workflows" tab="托管工作流">
+        <div class="flex min-h-0 flex-col gap-4">
+          <Alert
+            v-if="managedWorkflowFlags.unavailable"
+            type="warning"
+            show-icon
+            message="托管工作流事实接口暂未接入"
+            description="当前优先托管视图已预留接线；接口可用后将直接读取 SkillTask registry 的脱敏事实。"
+          />
+          <Alert
+            v-else-if="managedWorkflowFlags.loadFailed"
+            type="error"
+            show-icon
+            message="托管工作流加载失败"
+            description="请检查后端服务与权限后重试。"
+          />
+          <ManagedWorkflowGrid table-title="托管工作流">
+            <template #managed-workflow-steps="{ row }">
+              {{ row.stepCount }} 步（{{ row.writeStepCount }} 个写操作）
+            </template>
+            <template #managed-workflow-approval="{ row }">
+              <StatusTag
+                v-bind="
+                  row.approvalRequired
+                    ? { color: 'warning', label: '需要 BPM' }
+                    : { color: 'success', label: '无需审批' }
+                "
+              />
+            </template>
+            <template #managed-workflow-action="{ row }">
+              <TableAction
+                :actions="[
+                  {
+                    label: '详情',
+                    onClick: () => openWorkflowDetail(row),
+                    type: 'link',
+                  },
+                ]"
+              />
+            </template>
+          </ManagedWorkflowGrid>
+        </div>
+      </Tabs.TabPane>
+
+      <Tabs.TabPane key="runs" tab="运行实例">
+        <div class="flex min-h-0 flex-col gap-4">
+          <Alert
+            v-if="managedRunFlags.unavailable"
+            type="warning"
+            show-icon
+            message="托管运行实例接口暂未接入"
+            description="运行实例页仍保留 AI 遥测视角；托管接口到位后将优先展示 SkillTask instance 事实。"
+          />
+          <Alert
+            v-else-if="managedRunFlags.loadFailed"
+            type="error"
+            show-icon
+            message="托管运行实例加载失败"
+            description="请检查后端服务与权限后重试。"
+          />
+          <ManagedRunGrid table-title="托管运行实例">
+            <template #managed-run-workflow="{ row }">
+              <div class="truncate" :title="row.skillId">
+                {{ workflowName(row.skillId) }}
+              </div>
+            </template>
+            <template #managed-run-outcome="{ row }">
+              <div class="min-w-0 py-1">
+                <div class="truncate font-medium text-foreground">
+                  {{ row.businessOutcome?.headline || '业务结果生成中' }}
+                </div>
+                <div class="truncate text-xs text-muted-foreground">
+                  {{
+                    row.businessOutcome?.summary || '任务完成后生成业务结果摘要'
+                  }}
+                </div>
+              </div>
+            </template>
+            <template #managed-run-status="{ row }">
+              <StatusTag v-bind="getMeta(workflowRunStatusMeta, row.status)" />
+            </template>
+            <template #managed-run-current-step="{ row }">
+              <span class="truncate" :title="row.currentStepCode">
+                {{
+                  row.status === 'SUCCEEDED'
+                    ? '执行完成'
+                    : row.status === 'WAITING_APPROVAL'
+                      ? '等待 BPM 审批'
+                      : row.currentStepCode || '准备中'
+                }}
+              </span>
+            </template>
+            <template #managed-run-action="{ row }">
+              <TableAction
+                :actions="[
+                  {
+                    label: '详情',
+                    onClick: () => openRunDetail(row.taskId, 'managed'),
+                    type: 'link',
+                  },
+                ]"
+              />
+            </template>
+          </ManagedRunGrid>
+        </div>
+      </Tabs.TabPane>
+
+      <Tabs.TabPane key="artifacts" tab="运行产物">
+        <div class="flex min-h-0 flex-col gap-4">
+          <Alert
+            v-if="managedArtifactFlags.unavailable"
+            type="warning"
+            show-icon
+            message="SkillTask 终态产物接口暂未接通"
+            description="托管产物展示脱敏后的业务结果；原始负载不直接返回。"
+          />
+          <Alert
+            v-else-if="managedArtifactFlags.loadFailed"
+            type="error"
+            show-icon
+            message="SkillTask 终态产物加载失败"
+            description="请检查 SkillTask 执行服务与跨服务读取链路后重试。"
+          />
+          <ManagedArtifactGrid table-title="Agent 业务产物">
+            <template #managed-artifact-workflow="{ row }">
+              <div class="truncate" :title="row.skillId">
+                {{ workflowName(row.skillId) }}
+              </div>
+            </template>
+            <template #managed-artifact-outcome="{ row }">
+              <div class="min-w-0 py-1">
+                <div class="truncate font-medium text-foreground">
+                  {{ row.businessOutcome?.headline || '业务结果生成中' }}
+                </div>
+                <div class="truncate text-xs text-muted-foreground">
+                  {{
+                    row.businessOutcome?.summary || '任务完成后生成业务结果摘要'
+                  }}
+                </div>
+              </div>
+            </template>
+            <template #managed-artifact-status="{ row }">
+              <StatusTag v-bind="getMeta(workflowRunStatusMeta, row.status)" />
+            </template>
+            <template #managed-artifact-action="{ row }">
+              <TableAction
+                :actions="[
+                  {
+                    label: '详情',
+                    onClick: () => openRunDetail(row.taskId, 'managed'),
+                    type: 'link',
+                  },
+                ]"
+              />
+            </template>
+          </ManagedArtifactGrid>
+        </div>
+      </Tabs.TabPane>
+
+      <Tabs.TabPane key="observations-approval" tab="观测与审批">
+        <div class="flex min-h-0 flex-col gap-3">
+          <div
+            class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm"
+          >
+            <StatusTag color="processing" label="BPM 审批门禁" />
+            <span class="text-foreground">
+              指定审批人 → 工作流程待办 → 人工办理 → 安全确认 → 自动恢复 Agent
+            </span>
+            <span class="text-muted-foreground">
+              “终态待安全确认”表示 BPM 已结束但 Agent 尚未放行。
+            </span>
+          </div>
+
+          <Alert
+            v-if="cardsUnavailable"
+            banner
+            type="warning"
+            show-icon
+            message="审批能力当前未启用，运行观测仍可使用"
+          />
+          <Alert
+            v-else-if="cardsUnauthorized"
+            banner
+            type="warning"
+            show-icon
+            message="当前账号缺少审批查询权限，请重新登录以刷新最新权限"
+          />
+          <Alert
+            v-else-if="cardsLoadFailed"
+            banner
+            type="error"
+            show-icon
+            message="审批卡片加载失败"
+          />
+
+          <Card
+            v-if="!cardsUnavailable && !cardsUnauthorized"
+            :bordered="false"
+            :body-style="{ padding: '12px' }"
+          >
+            <Space wrap>
+              <Select
+                v-model:value="roleCode"
+                class="w-40"
+                allow-clear
+                placeholder="选择岗位"
+                :options="roleOptions"
+                @change="loadApprovalCards"
+              />
+              <Select
+                v-model:value="cardType"
+                class="w-40"
+                allow-clear
+                placeholder="选择事项"
+                :options="typeOptions"
+                @change="loadApprovalCards"
+              />
+              <Button :loading="cardsLoading" @click="loadApprovalCards">
+                刷新卡片
+              </Button>
+            </Space>
+
+            <Empty
+              v-if="!cardsLoading && !cards.length"
+              class="mt-4"
+              description="当前没有待处理审批卡片"
+            />
+            <Row v-else :gutter="[16, 16]" class="mt-4">
+              <Col
+                v-for="item in cards"
+                :key="item.cardId"
+                :xs="24"
+                :lg="12"
+                :xl="8"
+              >
+                <Card class="h-full" size="small">
+                  <Space direction="vertical" class="w-full" :size="8">
+                    <Space>
+                      <StatusTag
+                        v-bind="getMeta(approvalStatusMeta, item.status)"
+                      />
+                      <Typography.Text strong>{{ item.title }}</Typography.Text>
+                    </Space>
+                    <Typography.Text type="secondary">
+                      {{ approvalWorkflowSummary(item) }}
+                    </Typography.Text>
+                    <Typography.Paragraph
+                      class="mb-0"
+                      :ellipsis="{ rows: 3, expandable: true }"
+                    >
+                      {{
+                        item.summary ||
+                        '当前卡片只保留岗位、风险和摘要，不展示原始票据或技术上下文。'
+                      }}
+                    </Typography.Paragraph>
+                    <Space wrap>
+                      <StatusTag
+                        v-bind="{
+                          color: statusColor(item.status),
+                          label: statusNames[item.status] ?? item.status,
+                        }"
+                      />
+                      <Typography.Text type="secondary">
+                        {{ roleName(item.roleCode) }}
+                      </Typography.Text>
+                      <Typography.Text type="secondary">
+                        {{ formatTime(item.occurredAt) }}
+                      </Typography.Text>
+                      <Button
+                        v-if="item.processInstanceId"
+                        size="small"
+                        type="link"
+                        @click="openApproval(item)"
+                      >
+                        去工作流程办理
+                      </Button>
+                      <Button
+                        v-else-if="
+                          item.cardType === 'APPROVAL' &&
+                          item.status === 'PENDING' &&
+                          hasAccessByCodes([
+                            'cloudmold:agent-control:govern',
+                          ]) &&
+                          Number(userStore.userInfo?.id) !==
+                            item.requesterUserId
+                        "
+                        size="small"
+                        type="link"
+                        @click="openApprovalAssignment(item)"
+                      >
+                        指定审批人
+                      </Button>
+                    </Space>
+                  </Space>
+                </Card>
+              </Col>
+            </Row>
+          </Card>
+
+          <Alert
+            v-if="managedObservationFlags.unavailable"
+            type="warning"
+            show-icon
+            message="SkillTask 运行观测接口暂未接通"
+            description="托管观测只展示状态、当前步骤、尝试次数和更新时间。"
+          />
+          <Alert
+            v-else-if="managedObservationFlags.loadFailed"
+            type="error"
+            show-icon
+            message="SkillTask 运行观测加载失败"
+            description="请检查 SkillTask 执行服务与跨服务读取链路后重试。"
+          />
+          <ManagedObservationGrid table-title="SkillTask 运行观测">
+            <template #managed-observation-workflow="{ row }">
+              <div class="truncate" :title="row.skillId">
+                {{ workflowName(row.skillId) }}
+              </div>
+            </template>
+            <template #managed-observation-current-step="{ row }">
+              <span class="truncate" :title="row.currentStepCode">
+                {{
+                  row.status === 'SUCCEEDED'
+                    ? '全部阶段完成'
+                    : row.status === 'WAITING_APPROVAL'
+                      ? '等待 BPM 审批'
+                      : row.currentStepCode || '准备中'
+                }}
+              </span>
+            </template>
+            <template #managed-observation-status="{ row }">
+              <StatusTag v-bind="getMeta(workflowRunStatusMeta, row.status)" />
+            </template>
+            <template #managed-observation-action="{ row }">
+              <TableAction
+                :actions="[
+                  {
+                    label: '详情',
+                    onClick: () => openRunDetail(row.taskId, 'managed'),
+                    type: 'link',
+                  },
+                ]"
+              />
+            </template>
+          </ManagedObservationGrid>
+        </div>
+      </Tabs.TabPane>
+    </Tabs>
+
+    <RunDetailDrawer
+      v-model:open="detailOpen"
+      :run-id="detailRunId"
+      :source="detailSource"
+    />
+
+    <Modal
+      v-model:open="approvalAssignOpen"
+      title="指定本次审批人"
+      ok-text="确认指定"
+      cancel-text="取消"
+      :confirm-loading="approvalAssigning"
+      @ok="confirmApprovalAssignment"
+    >
+      <div class="space-y-3">
+        <Typography.Paragraph type="secondary">
+          每次审批只授予当前冻结动作；审批员必须与申请人、当前治理员不同。
+        </Typography.Paragraph>
+        <InputNumber
+          v-model:value="approvalAssigneeUserId"
+          class="w-full"
+          :min="1"
+          :precision="0"
+          placeholder="输入审批员用户 ID"
+        />
+      </div>
+    </Modal>
+
+    <Drawer
+      v-model:open="workflowDetailOpen"
+      title="托管工作流详情"
+      width="620"
+    >
+      <Descriptions v-if="selectedWorkflow" :column="1" bordered size="small">
+        <DescriptionsItem label="中文名称">
+          {{ selectedWorkflow.displayName }}
+        </DescriptionsItem>
+        <DescriptionsItem label="用途说明">
+          {{ selectedWorkflow.description }}
+        </DescriptionsItem>
+        <DescriptionsItem label="Skill ID">
+          <CopyIdCell :value="selectedWorkflow.skillId" label="Skill ID" />
+        </DescriptionsItem>
+        <DescriptionsItem label="版本">
+          {{ selectedWorkflow.skillVersion }}
+        </DescriptionsItem>
+        <DescriptionsItem label="风险等级">
+          {{ selectedWorkflow.riskLevel }}
+        </DescriptionsItem>
+        <DescriptionsItem label="执行规模">
+          {{ selectedWorkflow.stepCount }} 步，其中
+          {{ selectedWorkflow.writeStepCount }} 个写操作；最多尝试
+          {{ selectedWorkflow.maxAttempts }} 次
+        </DescriptionsItem>
+        <DescriptionsItem label="审批卡口">
+          {{ selectedWorkflow.approvalRequired ? '需要 BPM 审批' : '无需审批' }}
+        </DescriptionsItem>
+        <DescriptionsItem label="运行架构">
+          后台管理系统触发 · DeerFlow 编排 · SkillTask 持久化
+        </DescriptionsItem>
+        <DescriptionsItem label="定义闭包哈希">
+          <CopyIdCell
+            :value="selectedWorkflow.definitionClosureSha256"
+            label="定义闭包哈希"
+          />
+        </DescriptionsItem>
+      </Descriptions>
+    </Drawer>
   </Page>
 </template>
