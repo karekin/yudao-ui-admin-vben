@@ -4,10 +4,15 @@ import {
   aiOperationsConsoleNotice,
   approvalGateSummary,
   normalizeManagedWorkflowList,
+  temporalBusinessAutonomySummary,
+  temporalDiscoverySourceSummary,
+  temporalDispatchOutcomeSummary,
+  toCoveragePercent,
   useManagedArtifactColumns,
   useManagedObservationColumns,
   useManagedRunColumns,
   useManagedWorkflowColumns,
+  useTemporalAutomationOverviewColumns,
   useTemporalScheduleColumns,
 } from './data';
 
@@ -77,6 +82,37 @@ describe('ai operations presentation helpers', () => {
     );
   });
 
+  it('keeps schedule, candidate discovery, and autonomy proof semantically separate', () => {
+    expect(temporalDiscoverySourceSummary('TENANT_AGGREGATE').label).toBe(
+      '租户汇总输入',
+    );
+    expect(temporalDispatchOutcomeSummary('DISPATCHED')).toEqual({
+      color: 'processing',
+      label: '候选已分发',
+    });
+    expect(temporalDispatchOutcomeSummary('NO_ACTION_DUE')).toEqual({
+      color: 'default',
+      label: '本次无到期对象',
+    });
+    expect(temporalBusinessAutonomySummary('DISPATCHED').label).toContain(
+      '尚无自治实证',
+    );
+    expect(temporalBusinessAutonomySummary('NO_ACTION_DUE').label).toContain(
+      '尚无自治实证',
+    );
+    expect(temporalBusinessAutonomySummary('AUTONOMY_PROVEN')).toEqual({
+      color: 'success',
+      label: '自治实证成立',
+    });
+  });
+
+  it('keeps backend percentage coverage rates bounded for display', () => {
+    expect(toCoveragePercent(1)).toBe(1);
+    expect(toCoveragePercent(62.5)).toBe(62.5);
+    expect(toCoveragePercent(120)).toBe(100);
+    expect(toCoveragePercent(undefined)).toBe(0);
+  });
+
   it('keeps operational lists focused on business fields', () => {
     const fieldNames = (columns: ReturnType<typeof useManagedRunColumns>) =>
       columns?.map((column) => column.field);
@@ -94,10 +130,21 @@ describe('ai operations presentation helpers', () => {
       'displayName',
       'skillId',
       'intervalSeconds',
+      'inputStrategy',
       'status',
       'lastActionAt',
       'nextActionAt',
       'action',
+    ]);
+    expect(fieldNames(useTemporalAutomationOverviewColumns())).toEqual([
+      'displayName',
+      'scheduleState',
+      'discoverySource',
+      'lastDispatchOutcome',
+      'candidateCount',
+      'businessAutonomyState',
+      'gapCodes',
+      'proofRef',
     ]);
     expect(fieldNames(useManagedRunColumns())).toEqual([
       'skillId',

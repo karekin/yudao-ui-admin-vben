@@ -31,13 +31,23 @@ export namespace CloudMoldAiOperationsApi {
   }
 
   export interface TemporalSchedule {
+    cronExpression?: string;
+    definitionClosureSha256?: string;
     description: string;
     displayName: string;
+    inputStrategy?:
+      | 'DOMAIN_BACKLOG'
+      | 'EVENT_BACKLOG'
+      | 'ROTATING_BUSINESS_SCENARIO'
+      | 'STATIC'
+      | 'TENANT_AGGREGATE';
     intervalSeconds: number;
     lastActionAt?: string;
+    lastReconciledAt?: string;
     nextActionAt?: string;
     overlapPolicy: 'SKIP';
     paused: boolean;
+    reconcileError?: string;
     scheduleId: string;
     skillId: string;
     skillVersion: string;
@@ -45,6 +55,33 @@ export namespace CloudMoldAiOperationsApi {
     temporalNamespace: string;
     temporalTaskQueue: string;
     timeZone: string;
+  }
+
+  export interface TemporalAutomationWorkflow {
+    businessAutonomyState: string;
+    candidateCount: number;
+    discoverySource: string;
+    dispatchedCount: number;
+    displayName: string;
+    failedCount: number;
+    gapCodes: string[];
+    lastDispatchOutcome?: null | string;
+    proofRef?: null | string;
+    scheduleState: string;
+    skillId: string;
+    skillVersion: string;
+  }
+
+  export interface TemporalAutomationOverview {
+    autonomyProofCoverageRate: number;
+    autonomyProvenCount: number;
+    candidateSourceConnectedCount: number;
+    candidateSourceCoverageRate: number;
+    healthyScheduleCount: number;
+    registeredCount: number;
+    scheduleCoverageRate: number;
+    scheduledCount: number;
+    workflows: TemporalAutomationWorkflow[];
   }
 
   export interface ManagedRun {
@@ -371,6 +408,12 @@ export namespace CloudMoldAiOperationsApi {
 export function getCloudMoldTemporalScheduleList() {
   return requestClient.get<CloudMoldAiOperationsApi.TemporalSchedule[]>(
     '/cloudmold/ai-operations/temporal-schedules',
+  );
+}
+
+export function getCloudMoldTemporalAutomationOverview() {
+  return requestClient.get<CloudMoldAiOperationsApi.TemporalAutomationOverview>(
+    '/cloudmold/ai-operations/temporal-automation/overview',
   );
 }
 

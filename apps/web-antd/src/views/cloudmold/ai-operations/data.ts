@@ -11,7 +11,7 @@ import {
 } from '../shared/form-helpers';
 
 export const aiOperationsConsoleNotice =
-  '工作流由后台管理系统发起；DeerFlow 负责 Agent 管理与编排，CloudMold / SkillTask 保存运行实例和执行证据。';
+  '工作流由后台管理系统发起；Temporal 负责定时、编排与恢复，DeerFlow 负责 Agent 管理和有界决策，CloudMold / SkillTask 保存运行实例和执行证据。';
 
 export const managedWorkflowStatusMeta: Record<
   string,
@@ -78,6 +78,111 @@ export const approvalStatusMeta: Record<
   PENDING: { color: 'processing', label: '待审批' },
   REJECTED: { color: 'error', label: '已驳回' },
 };
+
+const temporalScheduleStateMeta: Record<
+  string,
+  { color: string; label: string }
+> = {
+  ACTIVE: { color: 'processing', label: '已调度' },
+  DEGRADED: { color: 'warning', label: '调度降级' },
+  DRIFTED: { color: 'error', label: '配置漂移' },
+  HEALTHY: { color: 'success', label: '调度健康' },
+  MISSING: { color: 'error', label: '未调度' },
+  PAUSED: { color: 'warning', label: '已暂停' },
+  SCHEDULED: { color: 'processing', label: '已调度' },
+};
+
+const temporalDiscoverySourceMeta: Record<
+  string,
+  { color: string; label: string }
+> = {
+  DOMAIN_BACKLOG: { color: 'processing', label: '领域业务待办' },
+  EVENT_BACKLOG: { color: 'processing', label: '事件积压队列' },
+  GOVERNED_MANUAL: { color: 'warning', label: '治理型人工候选' },
+  OUTBOX_EVENT: { color: 'processing', label: 'Outbox 事件' },
+  ROTATING_BUSINESS_SCENARIO: { color: 'success', label: '轮换业务场景' },
+  TENANT_AGGREGATE: { color: 'success', label: '租户汇总输入' },
+  UNWIRED: { color: 'error', label: '候选源未接' },
+};
+
+const temporalDispatchOutcomeMeta: Record<
+  string,
+  { color: string; label: string }
+> = {
+  DISPATCHED: { color: 'processing', label: '候选已分发' },
+  FAILED: { color: 'error', label: '发现失败' },
+  NO_ACTION_DUE: { color: 'default', label: '本次无到期对象' },
+  PARTIAL_DISPATCH: { color: 'warning', label: '部分候选已分发' },
+};
+
+const temporalBusinessAutonomyMeta: Record<
+  string,
+  { color: string; label: string }
+> = {
+  AUTONOMY_IN_PROGRESS: { color: 'processing', label: '业务处理中' },
+  AUTONOMY_PROVEN: { color: 'success', label: '自治实证成立' },
+  BLOCKED: { color: 'error', label: '自治受阻' },
+  DISPATCHED: { color: 'processing', label: '已分发，尚无自治实证' },
+  NEEDS_REVIEW: { color: 'warning', label: '待人工复核' },
+  NOT_PROVEN: { color: 'warning', label: '尚无自治实证' },
+  NO_ACTION_DUE: { color: 'default', label: '当前无任务，尚无自治实证' },
+  PROVEN: { color: 'success', label: '自治实证成立' },
+  READY_IDLE: { color: 'default', label: '发现正常，当前无任务' },
+  SCHEDULED_ONLY: { color: 'warning', label: '仅已调度' },
+};
+
+const temporalGapLabels: Record<string, string> = {
+  CANDIDATE_SOURCE_MISSING: '候选源未接',
+  AUTONOMY_PROOF_MISSING: '尚无业务自治实证',
+  GOVERNED_WRITE_INPUT_REQUIRED: '需受治理的写入候选',
+  GOVERNED_MANUAL_ENTRY: '需治理型人工候选',
+  MISSING_EXPERIMENT_SOR: '缺少实验事实源',
+  MISSING_FINANCE_SOR: '缺少财务事实源',
+  NO_RECENT_DISCOVERY: '近期无发现记录',
+  NO_SUCCESSFUL_BUSINESS_OUTCOME: '尚无业务成功实证',
+  SCHEDULE_DRIFT: '调度配置漂移',
+  SCHEDULE_DRIFTED: '调度配置漂移',
+  SCHEDULE_MISSING: '未建立每日调度',
+  SCHEDULE_PAUSED: '每日调度已暂停',
+};
+
+function automationMeta(
+  metadata: Record<string, { color: string; label: string }>,
+  value?: null | string,
+) {
+  const normalized = value?.trim().toUpperCase();
+  if (!normalized) {
+    return { color: 'default', label: '暂无记录' };
+  }
+  return metadata[normalized] ?? { color: 'default', label: normalized };
+}
+
+export function temporalScheduleStateSummary(value?: null | string) {
+  return automationMeta(temporalScheduleStateMeta, value);
+}
+
+export function temporalDiscoverySourceSummary(value?: null | string) {
+  return automationMeta(temporalDiscoverySourceMeta, value);
+}
+
+export function temporalDispatchOutcomeSummary(value?: null | string) {
+  return automationMeta(temporalDispatchOutcomeMeta, value);
+}
+
+export function temporalBusinessAutonomySummary(value?: null | string) {
+  return automationMeta(temporalBusinessAutonomyMeta, value);
+}
+
+export function temporalGapSummary(value: string) {
+  return temporalGapLabels[value.trim().toUpperCase()] ?? value;
+}
+
+export function toCoveragePercent(value?: null | number) {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.round(Math.min(100, Math.max(0, value)) * 10) / 10;
+}
 
 export function approvalGateSummary(status?: null | string) {
   switch (status) {
@@ -169,9 +274,15 @@ export function useTemporalScheduleColumns(): VxeTableGridOptions['columns'] {
     },
     {
       field: 'intervalSeconds',
-      minWidth: 110,
+      minWidth: 150,
       slots: { default: 'temporal-interval' },
       title: '执行周期',
+    },
+    {
+      field: 'inputStrategy',
+      minWidth: 130,
+      slots: { default: 'temporal-strategy' },
+      title: '输入发现',
     },
     {
       field: 'status',
@@ -196,6 +307,68 @@ export function useTemporalScheduleFormSchema(): VbenFormSchema[] {
     codeInput('scheduleId', 'Schedule ID'),
     codeInput('skillId', 'Skill ID'),
     statusInput(),
+  ];
+}
+
+export function useTemporalAutomationOverviewColumns(): VxeTableGridOptions['columns'] {
+  return withCloudMoldTableColumns([
+    {
+      field: 'displayName',
+      fixed: 'left',
+      minWidth: 240,
+      slots: { default: 'automation-workflow' },
+      title: '托管工作流',
+    },
+    {
+      field: 'scheduleState',
+      minWidth: 120,
+      slots: { default: 'automation-schedule' },
+      title: '调度状态',
+    },
+    {
+      field: 'discoverySource',
+      minWidth: 140,
+      slots: { default: 'automation-source' },
+      title: '候选来源',
+    },
+    {
+      field: 'lastDispatchOutcome',
+      minWidth: 150,
+      slots: { default: 'automation-dispatch' },
+      title: '最近发现',
+    },
+    {
+      field: 'candidateCount',
+      minWidth: 170,
+      slots: { default: 'automation-candidates' },
+      title: '候选分发',
+    },
+    {
+      field: 'businessAutonomyState',
+      minWidth: 180,
+      slots: { default: 'automation-autonomy' },
+      title: '业务自治',
+    },
+    {
+      field: 'gapCodes',
+      minWidth: 220,
+      slots: { default: 'automation-gaps' },
+      title: '覆盖缺口',
+    },
+    {
+      field: 'proofRef',
+      minWidth: 220,
+      slots: { default: 'automation-proof' },
+      title: '自治实证引用',
+    },
+  ]);
+}
+
+export function useTemporalAutomationOverviewFormSchema(): VbenFormSchema[] {
+  return [
+    codeInput('skillId', 'Skill ID'),
+    codeInput('scheduleState', '调度状态'),
+    codeInput('businessAutonomyState', '自治状态'),
   ];
 }
 

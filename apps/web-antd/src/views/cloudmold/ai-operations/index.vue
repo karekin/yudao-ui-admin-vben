@@ -5,7 +5,7 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CloudMoldAgentControlApi } from '#/api/cloudmold/agent-control';
 import type { CloudMoldAiOperationsApi } from '#/api/cloudmold/ai-operations';
 
-import { onMounted, ref, watch } from 'vue';
+import { onActivated, onDeactivated, onMounted, ref, watch } from 'vue';
 
 import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
@@ -27,6 +27,7 @@ import {
   Row,
   Select,
   Space,
+  Statistic,
   Tabs,
   Typography,
 } from 'ant-design-vue';
@@ -42,6 +43,7 @@ import {
   getCloudMoldManagedRunDetail,
   getCloudMoldManagedRunPage,
   getCloudMoldManagedWorkflowList,
+  getCloudMoldTemporalAutomationOverview,
   getCloudMoldTemporalScheduleList,
   pauseCloudMoldTemporalSchedule,
   resumeCloudMoldTemporalSchedule,
@@ -57,9 +59,17 @@ import {
   approvalGateSummary,
   approvalStatusMeta,
   normalizeManagedWorkflowList,
+  temporalBusinessAutonomySummary,
+  temporalDiscoverySourceSummary,
+  temporalDispatchOutcomeSummary,
+  temporalGapSummary,
+  temporalScheduleStateSummary,
+  toCoveragePercent,
   useManagedRunFormSchema,
   useManagedWorkflowColumns,
   useManagedWorkflowFormSchema,
+  useTemporalAutomationOverviewColumns,
+  useTemporalAutomationOverviewFormSchema,
   useTemporalScheduleColumns,
   useTemporalScheduleFormSchema,
   workflowRunStatusMeta,
@@ -172,6 +182,13 @@ const temporalScheduleFlags = ref<SectionFlags>({
   loadFailed: false,
   unavailable: false,
 });
+const temporalAutomationFlags = ref<SectionFlags>({
+  loadFailed: false,
+  unavailable: false,
+});
+const temporalAutomationLoading = ref(false);
+const temporalAutomationOverview =
+  ref<CloudMoldAiOperationsApi.TemporalAutomationOverview>();
 
 const workflowDetailOpen = ref(false);
 const selectedWorkflow = ref<CloudMoldAiOperationsApi.ManagedWorkflow>();
@@ -188,6 +205,49 @@ function openWorkflowDetail(
   selectedWorkflow.value = workflow;
   workflowDetailOpen.value = true;
 }
+
+const [TemporalAutomationGrid, temporalAutomationGridApi] = useVbenVxeGrid({
+  formOptions: {
+    collapsed: true,
+    collapsedRows: 1,
+    schema: useTemporalAutomationOverviewFormSchema(),
+    showCollapseButton: true,
+  },
+  gridOptions: {
+    columns: useTemporalAutomationOverviewColumns(),
+    height: 520,
+    proxyConfig: {
+      ajax: {
+        query: async ({ page }, formValues) => {
+          resetFlags(temporalAutomationFlags.value);
+          temporalAutomationLoading.value = true;
+          try {
+            const overview = await getCloudMoldTemporalAutomationOverview();
+            temporalAutomationOverview.value = overview;
+            const items = (overview.workflows ?? []).filter(
+              (item) =>
+                matchFilter(item.skillId, formValues.skillId) &&
+                matchFilter(item.scheduleState, formValues.scheduleState) &&
+                matchFilter(
+                  item.businessAutonomyState,
+                  formValues.businessAutonomyState,
+                ),
+            );
+            return paginateItems(items, page.currentPage, page.pageSize);
+          } catch (error) {
+            temporalAutomationOverview.value = undefined;
+            applyFailure(temporalAutomationFlags.value, error);
+            return emptyPage(page.currentPage, page.pageSize);
+          } finally {
+            temporalAutomationLoading.value = false;
+          }
+        },
+      },
+    },
+    rowConfig: { height: 64, isHover: true, keyField: 'skillId' },
+    toolbarConfig: { refresh: true, search: true },
+  } as VxeTableGridOptions<CloudMoldAiOperationsApi.TemporalAutomationWorkflow>,
+});
 
 const [TemporalScheduleGrid, temporalScheduleGridApi] = useVbenVxeGrid({
   formOptions: {
@@ -243,6 +303,7 @@ async function operateTemporalSchedule(
         : '已恢复',
   );
   temporalScheduleGridApi.query();
+  temporalAutomationGridApi.query();
 }
 
 const detailOpen = ref(false);
@@ -541,7 +602,7 @@ function managedObservationColumns(): VxeTableGridOptions['columns'] {
   ];
 }
 
-const [ManagedWorkflowGrid] = useVbenVxeGrid({
+const [ManagedWorkflowGrid, managedWorkflowGridApi] = useVbenVxeGrid({
   formOptions: {
     collapsed: true,
     collapsedRows: 1,
@@ -841,9 +902,27 @@ async function loadApprovalCards() {
 }
 
 watch(activeTab, (tab) => {
+  if (tab === 'managed-workflows') {
+    managedWorkflowGridApi.query();
+  }
   if (tab === 'observations-approval' && !cardsLoaded.value) {
     loadApprovalCards();
   }
+});
+
+function refreshManagedWorkflowsOnFocus() {
+  if (activeTab.value === 'managed-workflows') {
+    managedWorkflowGridApi.query();
+  }
+}
+
+onActivated(() => {
+  refreshManagedWorkflowsOnFocus();
+  window.addEventListener('focus', refreshManagedWorkflowsOnFocus);
+});
+
+onDeactivated(() => {
+  window.removeEventListener('focus', refreshManagedWorkflowsOnFocus);
 });
 
 onMounted(() => {
@@ -869,15 +948,29 @@ onMounted(() => {
           <Alert
             type="info"
             show-icon
-            message="Temporal 是定时与恢复权威"
-            description="后台管理系统负责创建、暂停、恢复和立即触发；DeerFlow 负责编排。R2/R3 每次触发都会创建新的 BPM 审批，审批通过后回调并恢复对应的 Temporal 运行。"
+            message="调度、候选与业务自治分层计量"
+            description="Temporal 调度健康只说明每日计划可触发；候选源覆盖说明业务对象能够进入队列；只有已形成业务终态实证的工作流才计入自治实证。候选已分发或本次无到期对象都不等于业务自治成功。"
+          />
+          <Alert
+            v-if="temporalAutomationFlags.unavailable"
+            type="warning"
+            show-icon
+            message="自动化总览能力尚未启用"
+            description="调度控制仍可使用；总览接口启用后将展示调度覆盖、候选源覆盖、自治实证和逐工作流缺口。"
+          />
+          <Alert
+            v-else-if="temporalAutomationFlags.loadFailed"
+            type="error"
+            show-icon
+            message="自动化总览加载失败"
+            description="请检查后端服务后重试。调度配置与业务自治实证不会被合并推断。"
           />
           <Alert
             v-if="temporalScheduleFlags.unavailable"
             type="warning"
             show-icon
             message="Temporal 调度能力尚未启用"
-            description="启用后可在此查看自动铺品等定时工作流、上次/下次触发时间和暂停状态。"
+            description="启用后可在此查看全部托管工作流的每日发现计划、输入策略、上次/下次触发时间和暂停状态。"
           />
           <Alert
             v-else-if="temporalScheduleFlags.loadFailed"
@@ -886,7 +979,152 @@ onMounted(() => {
             message="Temporal 定时任务加载失败"
             description="请检查 Temporal 服务和后端连接状态后重试。"
           />
-          <TemporalScheduleGrid table-title="Temporal 定时任务">
+
+          <Row v-if="temporalAutomationOverview" :gutter="[16, 16]">
+            <Col :lg="8" :xs="24">
+              <Card
+                class="h-full"
+                :bordered="false"
+                :loading="temporalAutomationLoading"
+                size="small"
+              >
+                <Statistic
+                  title="调度覆盖率"
+                  suffix="%"
+                  :value="
+                    toCoveragePercent(
+                      temporalAutomationOverview.scheduleCoverageRate,
+                    )
+                  "
+                />
+                <div class="mt-2 text-xs text-muted-foreground">
+                  健康 {{ temporalAutomationOverview.healthyScheduleCount }} /
+                  {{ temporalAutomationOverview.registeredCount }}，已创建
+                  {{ temporalAutomationOverview.scheduledCount }} 个调度
+                </div>
+              </Card>
+            </Col>
+            <Col :lg="8" :xs="24">
+              <Card
+                class="h-full"
+                :bordered="false"
+                :loading="temporalAutomationLoading"
+                size="small"
+              >
+                <Statistic
+                  title="候选源覆盖率"
+                  suffix="%"
+                  :value="
+                    toCoveragePercent(
+                      temporalAutomationOverview.candidateSourceCoverageRate,
+                    )
+                  "
+                />
+                <div class="mt-2 text-xs text-muted-foreground">
+                  {{ temporalAutomationOverview.candidateSourceConnectedCount }}
+                  / {{ temporalAutomationOverview.registeredCount }}
+                  个工作流已接入可识别候选源
+                </div>
+              </Card>
+            </Col>
+            <Col :lg="8" :xs="24">
+              <Card
+                class="h-full"
+                :bordered="false"
+                :loading="temporalAutomationLoading"
+                size="small"
+              >
+                <Statistic
+                  title="自治实证覆盖率"
+                  suffix="%"
+                  :value="
+                    toCoveragePercent(
+                      temporalAutomationOverview.autonomyProofCoverageRate,
+                    )
+                  "
+                />
+                <div class="mt-2 text-xs text-muted-foreground">
+                  {{ temporalAutomationOverview.autonomyProvenCount }} /
+                  {{ temporalAutomationOverview.registeredCount }}
+                  个工作流已有业务终态实证
+                </div>
+              </Card>
+            </Col>
+          </Row>
+
+          <TemporalAutomationGrid table-title="自动化总览">
+            <template #automation-workflow="{ row }">
+              <div class="min-w-0 py-1">
+                <div class="truncate font-medium text-foreground">
+                  {{ row.displayName }}
+                </div>
+                <div
+                  class="truncate text-xs text-muted-foreground"
+                  :title="row.skillId"
+                >
+                  {{ row.skillId }} · {{ row.skillVersion }}
+                </div>
+              </div>
+            </template>
+            <template #automation-schedule="{ row }">
+              <StatusTag
+                v-bind="temporalScheduleStateSummary(row.scheduleState)"
+              />
+            </template>
+            <template #automation-source="{ row }">
+              <StatusTag
+                v-bind="temporalDiscoverySourceSummary(row.discoverySource)"
+              />
+            </template>
+            <template #automation-dispatch="{ row }">
+              <StatusTag
+                v-bind="temporalDispatchOutcomeSummary(row.lastDispatchOutcome)"
+              />
+            </template>
+            <template #automation-candidates="{ row }">
+              <div class="text-sm">
+                候选 {{ row.candidateCount }} · 已分发
+                {{ row.dispatchedCount }}
+              </div>
+              <div
+                :class="
+                  row.failedCount > 0
+                    ? 'text-xs text-destructive'
+                    : 'text-xs text-muted-foreground'
+                "
+              >
+                失败 {{ row.failedCount }}
+              </div>
+            </template>
+            <template #automation-autonomy="{ row }">
+              <StatusTag
+                v-bind="
+                  temporalBusinessAutonomySummary(row.businessAutonomyState)
+                "
+              />
+            </template>
+            <template #automation-gaps="{ row }">
+              <Space v-if="row.gapCodes?.length" wrap :size="[4, 4]">
+                <StatusTag
+                  v-for="gap in row.gapCodes"
+                  :key="gap"
+                  color="warning"
+                  :label="temporalGapSummary(gap)"
+                />
+              </Space>
+              <StatusTag v-else color="success" label="无已知缺口" />
+            </template>
+            <template #automation-proof="{ row }">
+              <CopyIdCell
+                v-if="row.proofRef"
+                :value="row.proofRef"
+                label="自治实证引用"
+              />
+              <span v-else class="text-muted-foreground">尚无实证</span>
+            </template>
+          </TemporalAutomationGrid>
+
+          <TemporalScheduleGrid table-title="Temporal 调度控制">
             <template #temporal-name="{ row }">
               <div class="min-w-0 py-1">
                 <div class="truncate font-medium text-foreground">
@@ -903,18 +1141,47 @@ onMounted(() => {
               </div>
             </template>
             <template #temporal-interval="{ row }">
-              {{
-                row.intervalSeconds === 3600
-                  ? '每小时'
-                  : `${row.intervalSeconds} 秒`
-              }}
+              <div>
+                <div>
+                  {{
+                    row.cronExpression
+                      ? `每日（${row.timeZone}）`
+                      : row.intervalSeconds === 3600
+                        ? '每小时'
+                        : `${row.intervalSeconds} 秒`
+                  }}
+                </div>
+                <div
+                  v-if="row.cronExpression"
+                  class="text-xs text-muted-foreground"
+                >
+                  {{ row.cronExpression }}
+                </div>
+              </div>
+            </template>
+            <template #temporal-strategy="{ row }">
+              <StatusTag
+                v-bind="
+                  row.inputStrategy === 'TENANT_AGGREGATE'
+                    ? { color: 'success', label: '租户汇总输入' }
+                    : row.inputStrategy === 'EVENT_BACKLOG'
+                      ? { color: 'processing', label: '事件候选队列' }
+                      : row.inputStrategy === 'DOMAIN_BACKLOG'
+                        ? { color: 'processing', label: '领域业务待办' }
+                        : row.inputStrategy === 'ROTATING_BUSINESS_SCENARIO'
+                          ? { color: 'success', label: '轮换业务场景' }
+                          : { color: 'default', label: '固定输入' }
+                "
+              />
             </template>
             <template #temporal-status="{ row }">
               <StatusTag
                 v-bind="
-                  row.paused
-                    ? { color: 'warning', label: '已暂停' }
-                    : { color: 'success', label: '运行中' }
+                  row.status === 'DRIFTED'
+                    ? { color: 'error', label: '配置漂移' }
+                    : row.paused
+                      ? { color: 'warning', label: '已暂停' }
+                      : { color: 'success', label: '调度运行中' }
                 "
               />
             </template>

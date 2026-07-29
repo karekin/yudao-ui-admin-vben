@@ -11,6 +11,7 @@ import {
   getCloudMoldManagedRunDetail,
   getCloudMoldManagedRunPage,
   getCloudMoldManagedWorkflowList,
+  getCloudMoldTemporalAutomationOverview,
 } from './index';
 
 vi.mock('#/api/request', () => ({
@@ -27,6 +28,14 @@ describe('cloudmold ai-operations api', () => {
 
     expect(requestClient.get).toHaveBeenCalledWith(
       '/cloudmold/ai-operations/managed-workflows',
+    );
+  });
+
+  it('queries the three-layer Temporal automation overview', async () => {
+    await getCloudMoldTemporalAutomationOverview();
+
+    expect(requestClient.get).toHaveBeenCalledWith(
+      '/cloudmold/ai-operations/temporal-automation/overview',
     );
   });
 
