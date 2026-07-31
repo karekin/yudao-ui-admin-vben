@@ -942,6 +942,12 @@ function approvalDecision(item: CloudMoldAgentControlApi.BusinessCard) {
   return buildApprovalDecisionPresentation(item);
 }
 
+function scrollToManagedObservation() {
+  document
+    .querySelector('#managed-observation-detail')
+    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function openApproval(item: CloudMoldAgentControlApi.BusinessCard) {
   if (!item.processInstanceId) return;
   router.push({
@@ -1703,69 +1709,87 @@ onMounted(() => {
       </Tabs.TabPane>
 
       <Tabs.TabPane key="observations-approval" tab="观测与审批">
-        <div class="flex min-h-0 flex-col gap-3">
-          <div
-            class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm"
-          >
+        <section class="approval-workspace">
+          <div class="approval-hero">
+            <div class="approval-hero-copy">
+              <div class="approval-hero-crumb">AI 运营 / 观测与审批</div>
+              <h2>审批工作台</h2>
+              <p>
+                聚焦需要人工判断的业务节点，清晰连接审批门禁、任务执行与运行观测。
+              </p>
+              <Space wrap>
+                <Button
+                  type="primary"
+                  :loading="cardsLoading"
+                  @click="loadApprovalCards"
+                >
+                  刷新队列
+                </Button>
+                <Button @click="scrollToManagedObservation">
+                  查看运行观测
+                </Button>
+              </Space>
+            </div>
+            <div class="approval-focus-metric">
+              <span>当前审批阻塞</span>
+              <strong>{{ approvalBoardStats?.pendingTotal ?? '-' }}</strong>
+              <small v-if="approvalBoardStats">
+                {{ approvalBoardStats.bpmInProgress }} 项正在 BPM 审批
+              </small>
+              <small v-else>正在加载审批汇总</small>
+            </div>
+          </div>
+
+          <div class="approval-gate-note" aria-label="BPM 审批门禁说明">
             <StatusTag color="processing" label="BPM 审批门禁" />
-            <span class="text-foreground">
-              指定审批人 → 工作流程待办 → 人工办理 → 安全确认 → 自动恢复 Agent
-            </span>
-            <span class="text-muted-foreground">
+            <span>指定审批人 → 工作流程待办 → 人工办理 → 安全确认 → 自动恢复
+              Agent</span>
+            <span class="approval-gate-note-muted">
               已安全确认的记录会显示为“等待执行”，不会计入审批阻塞。
             </span>
           </div>
 
-          <Row v-if="approvalBoardStats" :gutter="[12, 12]">
-            <Col :xs="12" :md="8" :xl="4">
-              <Card size="small">
-                <Statistic
-                  title="审批阻塞总数"
-                  :value="approvalBoardStats.pendingTotal"
-                />
-              </Card>
-            </Col>
-            <Col :xs="12" :md="8" :xl="4">
-              <Card size="small">
-                <Statistic
-                  title="BPM 审批中"
-                  :value="approvalBoardStats.bpmInProgress"
-                />
-              </Card>
-            </Col>
-            <Col :xs="12" :md="8" :xl="4">
-              <Card size="small">
-                <Statistic
-                  title="待指定审批人"
-                  :value="approvalBoardStats.approverAssignmentRequired"
-                />
-              </Card>
-            </Col>
-            <Col :xs="12" :md="8" :xl="4">
-              <Card size="small">
-                <Statistic
-                  title="启动结果待对账"
-                  :value="approvalBoardStats.startUncertain"
-                />
-              </Card>
-            </Col>
-            <Col :xs="12" :md="8" :xl="4">
-              <Card size="small">
-                <Statistic
-                  title="终态待安全确认"
-                  :value="approvalBoardStats.bpmTerminalPendingSafety"
-                />
-              </Card>
-            </Col>
-            <Col :xs="12" :md="8" :xl="4">
-              <Card size="small">
-                <Statistic
-                  title="已放行待执行"
-                  :value="approvalBoardStats.releasedWaitingExecution"
-                />
-              </Card>
-            </Col>
-          </Row>
+          <section v-if="approvalBoardStats" class="approval-funnel">
+            <div class="approval-section-heading">
+              <div>
+                <span class="approval-eyebrow">审批链路</span>
+                <h3>从风险识别到安全放行</h3>
+              </div>
+              <span class="approval-section-hint">实时汇总</span>
+            </div>
+            <div class="approval-metric-grid">
+              <div class="approval-metric is-primary">
+                <span>审批阻塞总数</span>
+                <strong>{{ approvalBoardStats.pendingTotal }}</strong>
+              </div>
+              <div class="approval-metric">
+                <span>BPM 审批中</span>
+                <strong>{{ approvalBoardStats.bpmInProgress }}</strong>
+              </div>
+              <div class="approval-metric">
+                <span>待指定审批人</span>
+                <strong>{{
+                  approvalBoardStats.approverAssignmentRequired
+                }}</strong>
+              </div>
+              <div class="approval-metric">
+                <span>启动结果待对账</span>
+                <strong>{{ approvalBoardStats.startUncertain }}</strong>
+              </div>
+              <div class="approval-metric">
+                <span>终态待安全确认</span>
+                <strong>{{
+                  approvalBoardStats.bpmTerminalPendingSafety
+                }}</strong>
+              </div>
+              <div class="approval-metric">
+                <span>已放行待执行</span>
+                <strong>{{
+                  approvalBoardStats.releasedWaitingExecution
+                }}</strong>
+              </div>
+            </div>
+          </section>
 
           <Alert
             v-if="cardsUnavailable"
@@ -1789,94 +1813,84 @@ onMounted(() => {
             message="审批卡片加载失败"
           />
 
-          <Card
-            v-if="!cardsUnavailable && !cardsUnauthorized"
-            :bordered="false"
-            :body-style="{ padding: '12px' }"
-          >
-            <Space wrap>
-              <Select
-                v-model:value="roleCode"
-                class="w-40"
-                allow-clear
-                placeholder="选择岗位"
-                :options="roleOptions"
-                @change="loadApprovalCards"
-              />
-              <Select
-                v-model:value="cardType"
-                class="w-40"
-                allow-clear
-                placeholder="选择事项"
-                :options="typeOptions"
-                @change="loadApprovalCards"
-              />
-              <Button :loading="cardsLoading" @click="loadApprovalCards">
-                刷新卡片
-              </Button>
-            </Space>
+          <div class="approval-workbench">
+            <section
+              v-if="!cardsUnavailable && !cardsUnauthorized"
+              class="approval-queue"
+            >
+              <div class="approval-queue-heading">
+                <div>
+                  <span class="approval-eyebrow">优先处理</span>
+                  <h3>待处理事项</h3>
+                </div>
+                <Space wrap>
+                  <Select
+                    v-model:value="roleCode"
+                    class="approval-filter"
+                    allow-clear
+                    placeholder="选择岗位"
+                    :options="roleOptions"
+                    @change="loadApprovalCards"
+                  />
+                  <Select
+                    v-model:value="cardType"
+                    class="approval-filter"
+                    allow-clear
+                    placeholder="选择事项"
+                    :options="typeOptions"
+                    @change="loadApprovalCards"
+                  />
+                </Space>
+              </div>
 
-            <Empty
-              v-if="!cardsLoading && !cards.length"
-              class="mt-4"
-              description="当前没有待处理审批卡片"
-            />
-            <Row v-else :gutter="[16, 16]" class="mt-4">
-              <Col
-                v-for="item in cards"
-                :key="item.cardId"
-                :xs="24"
-                :lg="12"
-                :xl="8"
-              >
-                <Card class="h-full" size="small">
-                  <Space direction="vertical" class="w-full" :size="8">
-                    <Space>
-                      <StatusTag
-                        v-bind="getMeta(approvalStatusMeta, item.status)"
-                      />
-                      <Typography.Text strong>
-                        {{ approvalDecision(item)?.title || item.title }}
-                      </Typography.Text>
-                    </Space>
-                    <Typography.Text type="secondary">
-                      {{ approvalWorkflowSummary(item) }}
-                    </Typography.Text>
-                    <template
-                      v-if="
-                        item.cardType === 'APPROVAL' && approvalDecision(item)
-                      "
-                    >
-                      <div class="rounded bg-muted/50 px-3 py-2 text-sm">
-                        <div class="font-medium text-foreground">
-                          要完成什么
-                        </div>
-                        <div class="text-muted-foreground">
-                          {{ approvalDecision(item)?.objective }}
-                        </div>
-                        <div class="mt-2 font-medium text-foreground">
-                          审批后产出
-                        </div>
-                        <div class="text-muted-foreground">
-                          {{ approvalDecision(item)?.outputs.join('、') }}
-                        </div>
-                        <div class="mt-2 font-medium text-foreground">
-                          高风险原因
-                        </div>
-                        <div class="text-muted-foreground">
-                          {{ approvalDecision(item)?.riskReason }}
-                        </div>
-                      </div>
-                    </template>
-                    <Typography.Paragraph
-                      class="mb-0"
-                      :ellipsis="{ rows: 3, expandable: true }"
-                    >
-                      {{
-                        item.summary ||
-                        '当前卡片只保留岗位、风险和摘要，不展示原始票据或技术上下文。'
-                      }}
-                    </Typography.Paragraph>
+              <Empty
+                v-if="!cardsLoading && !cards.length"
+                class="approval-empty-state"
+                description="当前没有待处理审批卡片"
+              />
+              <div v-else class="approval-card-list">
+                <article
+                  v-for="item in cards"
+                  :key="item.cardId"
+                  class="approval-card"
+                >
+                  <div class="approval-card-topline">
+                    <StatusTag
+                      v-bind="getMeta(approvalStatusMeta, item.status)"
+                    />
+                    <span class="approval-card-role">{{
+                      roleName(item.roleCode)
+                    }}</span>
+                  </div>
+                  <h4>{{ approvalDecision(item)?.title || item.title }}</h4>
+                  <p class="approval-card-workflow">
+                    {{ approvalWorkflowSummary(item) }}
+                  </p>
+                  <div
+                    v-if="
+                      item.cardType === 'APPROVAL' && approvalDecision(item)
+                    "
+                    class="approval-card-decision"
+                  >
+                    <div>
+                      <span>要完成什么</span>
+                      <p>{{ approvalDecision(item)?.objective }}</p>
+                    </div>
+                    <div>
+                      <span>高风险原因</span>
+                      <p>{{ approvalDecision(item)?.riskReason }}</p>
+                    </div>
+                  </div>
+                  <Typography.Paragraph
+                    class="approval-card-summary"
+                    :ellipsis="{ rows: 2, expandable: true }"
+                  >
+                    {{
+                      item.summary ||
+                      '当前卡片只保留岗位、风险和摘要，不展示原始票据或技术上下文。'
+                    }}
+                  </Typography.Paragraph>
+                  <div class="approval-card-footer">
                     <Space wrap>
                       <StatusTag
                         v-bind="{
@@ -1884,115 +1898,166 @@ onMounted(() => {
                           label: statusNames[item.status] ?? item.status,
                         }"
                       />
-                      <Typography.Text type="secondary">
-                        {{ roleName(item.roleCode) }}
-                      </Typography.Text>
-                      <Typography.Text type="secondary">
-                        {{ formatTime(item.occurredAt) }}
-                      </Typography.Text>
-                      <Button
-                        v-if="item.processInstanceId"
-                        size="small"
-                        type="link"
-                        @click="openApproval(item)"
-                      >
-                        审阅业务影响与流程
-                      </Button>
-                      <Button
-                        v-else-if="
-                          item.cardType === 'APPROVAL' &&
-                          item.status === 'PENDING' &&
-                          item.workflowStatus === 'START_REQUESTED' &&
-                          hasAccessByCodes([
-                            'cloudmold:agent-control:govern',
-                          ]) &&
-                          Number(userStore.userInfo?.id) !==
-                            item.requesterUserId
-                        "
-                        size="small"
-                        type="link"
-                        @click="openApprovalAssignment(item)"
-                      >
-                        指定审批人
-                      </Button>
-                      <Typography.Text
-                        v-else-if="item.workflowStatus === 'START_UNCERTAIN'"
-                        type="warning"
-                      >
-                        需对账
-                      </Typography.Text>
+                      <span>{{ formatTime(item.occurredAt) }}</span>
                     </Space>
-                  </Space>
-                </Card>
-              </Col>
-            </Row>
-          </Card>
+                    <Button
+                      v-if="item.processInstanceId"
+                      size="small"
+                      type="link"
+                      @click="openApproval(item)"
+                    >
+                      审阅业务影响与流程
+                    </Button>
+                    <Button
+                      v-else-if="
+                        item.cardType === 'APPROVAL' &&
+                        item.status === 'PENDING' &&
+                        item.workflowStatus === 'START_REQUESTED' &&
+                        hasAccessByCodes(['cloudmold:agent-control:govern']) &&
+                        Number(userStore.userInfo?.id) !== item.requesterUserId
+                      "
+                      size="small"
+                      type="link"
+                      @click="openApprovalAssignment(item)"
+                    >
+                      指定审批人
+                    </Button>
+                    <Typography.Text
+                      v-else-if="item.workflowStatus === 'START_UNCERTAIN'"
+                      type="warning"
+                    >
+                      需对账
+                    </Typography.Text>
+                  </div>
+                </article>
+              </div>
+            </section>
 
-          <Alert
-            v-if="managedObservationFlags.unavailable"
-            type="warning"
-            show-icon
-            message="SkillTask 运行观测接口暂未接通"
-            description="托管观测只展示状态、当前步骤、尝试次数和更新时间。"
-          />
-          <Alert
-            v-else-if="managedObservationFlags.loadFailed"
-            type="error"
-            show-icon
-            message="SkillTask 运行观测加载失败"
-            description="请检查 SkillTask 执行服务与跨服务读取链路后重试。"
-          />
-          <ManagedObservationGrid table-title="SkillTask 运行观测">
-            <template #managed-observation-workflow="{ row }">
-              <div class="truncate" :title="row.skillId">
-                {{ workflowName(row.skillId) }}
+            <aside class="approval-observation-aside">
+              <div>
+                <span class="approval-eyebrow">运行观测</span>
+                <h3>Agent 执行护栏</h3>
+                <p>
+                  审批状态、当前步骤与重试情况在下方 SkillTask 明细中统一核查。
+                </p>
               </div>
-            </template>
-            <template #managed-observation-outcome="{ row }">
-              <div class="min-w-0 py-1">
-                <div class="truncate font-medium text-foreground">
-                  {{ row.businessOutcome?.headline || '业务结果生成中' }}
+              <div
+                class="approval-observation-status"
+                :class="{
+                  'is-unavailable':
+                    managedObservationFlags.unavailable ||
+                    managedObservationFlags.loadFailed,
+                }"
+              >
+                <span class="approval-observation-dot"></span>
+                <div>
+                  <strong>
+                    {{
+                      managedObservationFlags.unavailable ||
+                      managedObservationFlags.loadFailed
+                        ? '观测链路需要检查'
+                        : '观测链路已就绪'
+                    }}
+                  </strong>
+                  <p>
+                    {{
+                      managedObservationFlags.unavailable ||
+                      managedObservationFlags.loadFailed
+                        ? '请检查下方提示并恢复 SkillTask 运行观测接口。'
+                        : '支持按运行状态、工作流和时间范围快速检索。'
+                    }}
+                  </p>
                 </div>
-                <div class="truncate text-xs text-muted-foreground">
+              </div>
+              <div class="approval-safety-rule">
+                <span>安全放行规则</span>
+                <p>仅在审批通过并完成安全确认后，Agent 才会恢复执行。</p>
+              </div>
+              <Button block @click="scrollToManagedObservation">
+                打开运行明细
+              </Button>
+            </aside>
+          </div>
+
+          <section
+            id="managed-observation-detail"
+            class="approval-observation-detail"
+          >
+            <div class="approval-section-heading">
+              <div>
+                <span class="approval-eyebrow">SkillTask</span>
+                <h3>运行观测明细</h3>
+              </div>
+              <span class="approval-section-hint">状态、步骤与重试记录</span>
+            </div>
+            <Alert
+              v-if="managedObservationFlags.unavailable"
+              type="warning"
+              show-icon
+              message="SkillTask 运行观测接口暂未接通"
+              description="托管观测只展示状态、当前步骤、尝试次数和更新时间。"
+            />
+            <Alert
+              v-else-if="managedObservationFlags.loadFailed"
+              type="error"
+              show-icon
+              message="SkillTask 运行观测加载失败"
+              description="请检查 SkillTask 执行服务与跨服务读取链路后重试。"
+            />
+            <ManagedObservationGrid table-title="SkillTask 运行观测">
+              <template #managed-observation-workflow="{ row }">
+                <div class="truncate" :title="row.skillId">
+                  {{ workflowName(row.skillId) }}
+                </div>
+              </template>
+              <template #managed-observation-outcome="{ row }">
+                <div class="min-w-0 py-1">
+                  <div class="truncate font-medium text-foreground">
+                    {{ row.businessOutcome?.headline || '业务结果生成中' }}
+                  </div>
+                  <div class="truncate text-xs text-muted-foreground">
+                    {{
+                      row.businessOutcome?.summary || '等待业务阶段沉淀结果摘要'
+                    }}
+                  </div>
+                </div>
+              </template>
+              <template #managed-observation-current-step="{ row }">
+                <span class="truncate" :title="row.currentStepCode">
                   {{
-                    row.businessOutcome?.summary || '等待业务阶段沉淀结果摘要'
+                    row.status === 'SUCCEEDED'
+                      ? '全部阶段完成'
+                      : businessProgressLabel(row)
                   }}
-                </div>
-              </div>
-            </template>
-            <template #managed-observation-current-step="{ row }">
-              <span class="truncate" :title="row.currentStepCode">
-                {{
-                  row.status === 'SUCCEEDED'
-                    ? '全部阶段完成'
-                    : businessProgressLabel(row)
-                }}
-              </span>
-            </template>
-            <template #managed-observation-status="{ row }">
-              <StatusTag v-bind="getMeta(workflowRunStatusMeta, row.status)" />
-            </template>
-            <template #managed-observation-completed="{ row }">
-              {{ runCompletionLabel(row) }}
-            </template>
-            <template #managed-observation-action="{ row }">
-              <TableAction
-                :actions="[
-                  {
-                    label: '详情',
-                    onClick: () =>
-                      openRunDetail(
-                        row.taskId,
-                        'managed',
-                        workflowName(row.skillId),
-                      ),
-                    type: 'link',
-                  },
-                ]"
-              />
-            </template>
-          </ManagedObservationGrid>
-        </div>
+                </span>
+              </template>
+              <template #managed-observation-status="{ row }">
+                <StatusTag
+                  v-bind="getMeta(workflowRunStatusMeta, row.status)"
+                />
+              </template>
+              <template #managed-observation-completed="{ row }">
+                {{ runCompletionLabel(row) }}
+              </template>
+              <template #managed-observation-action="{ row }">
+                <TableAction
+                  :actions="[
+                    {
+                      label: '详情',
+                      onClick: () =>
+                        openRunDetail(
+                          row.taskId,
+                          'managed',
+                          workflowName(row.skillId),
+                        ),
+                      type: 'link',
+                    },
+                  ]"
+                />
+              </template>
+            </ManagedObservationGrid>
+          </section>
+        </section>
       </Tabs.TabPane>
     </Tabs>
 
@@ -2210,3 +2275,405 @@ onMounted(() => {
     </Drawer>
   </Page>
 </template>
+
+<style scoped>
+.approval-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  padding-bottom: 8px;
+}
+
+.approval-hero,
+.approval-funnel,
+.approval-queue,
+.approval-observation-aside,
+.approval-observation-detail {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 16px;
+}
+
+.approval-hero {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28px 32px;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at right top,
+      hsl(var(--primary) / 14%),
+      transparent 35%
+    ),
+    linear-gradient(
+      122deg,
+      hsl(var(--card)) 0%,
+      hsl(var(--background-deep)) 100%
+    );
+}
+
+.approval-hero-copy {
+  min-width: 0;
+}
+
+.approval-hero-crumb,
+.approval-eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  color: hsl(var(--primary));
+  letter-spacing: 0.06em;
+}
+
+.approval-hero h2,
+.approval-section-heading h3,
+.approval-queue-heading h3,
+.approval-observation-aside h3 {
+  margin: 6px 0 0;
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.3;
+  color: hsl(var(--foreground));
+}
+
+.approval-hero p,
+.approval-observation-aside > div > p {
+  max-width: 620px;
+  margin: 8px 0 16px;
+  line-height: 1.75;
+  color: hsl(var(--muted-foreground));
+}
+
+.approval-focus-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 184px;
+  padding: 4px 0 4px 24px;
+  border-left: 1px solid hsl(var(--border));
+}
+
+.approval-focus-metric span,
+.approval-focus-metric small,
+.approval-section-hint,
+.approval-metric span,
+.approval-card-role,
+.approval-card-footer,
+.approval-card-decision span,
+.approval-safety-rule span {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+}
+
+.approval-focus-metric strong {
+  font-size: 42px;
+  font-weight: 650;
+  line-height: 1.15;
+  color: hsl(var(--primary));
+}
+
+.approval-gate-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 11px 14px;
+  font-size: 13px;
+  color: hsl(var(--foreground));
+  background: hsl(var(--primary) / 6%);
+  border: 1px solid hsl(var(--primary) / 26%);
+  border-radius: 12px;
+}
+
+.approval-gate-note-muted {
+  color: hsl(var(--muted-foreground));
+}
+
+.approval-funnel,
+.approval-queue,
+.approval-observation-aside,
+.approval-observation-detail {
+  padding: 20px;
+}
+
+.approval-section-heading,
+.approval-queue-heading {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.approval-section-heading h3,
+.approval-queue-heading h3,
+.approval-observation-aside h3 {
+  font-size: 18px;
+}
+
+.approval-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.approval-metric {
+  min-width: 0;
+  padding: 14px;
+  background: hsl(var(--background-deep) / 45%);
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+}
+
+.approval-metric.is-primary {
+  background: hsl(var(--primary) / 8%);
+  border-color: hsl(var(--primary) / 26%);
+}
+
+.approval-metric span {
+  display: block;
+  min-height: 34px;
+  line-height: 1.45;
+}
+
+.approval-metric strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 25px;
+  font-weight: 650;
+  line-height: 1;
+  color: hsl(var(--foreground));
+}
+
+.approval-metric.is-primary strong {
+  color: hsl(var(--primary));
+}
+
+.approval-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 16px;
+  align-items: start;
+}
+
+.approval-filter {
+  width: 150px;
+}
+
+.approval-empty-state {
+  padding: 42px 0;
+}
+
+.approval-card-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.approval-card {
+  padding: 16px;
+  background: hsl(var(--background-deep) / 35%);
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.approval-card:hover {
+  border-color: hsl(var(--primary) / 38%);
+  box-shadow: 0 10px 28px hsl(var(--foreground) / 6%);
+}
+
+.approval-card-topline,
+.approval-card-footer {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.approval-card h4 {
+  margin: 10px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: hsl(var(--foreground));
+}
+
+.approval-card-workflow {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: hsl(var(--muted-foreground));
+}
+
+.approval-card-decision {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  margin-top: 12px;
+  background: hsl(var(--muted) / 58%);
+  border-radius: 10px;
+}
+
+.approval-card-decision span {
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.approval-card-decision p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: hsl(var(--muted-foreground));
+}
+
+.approval-card-summary {
+  margin: 12px 0 !important;
+  font-size: 13px;
+  line-height: 1.65;
+  color: hsl(var(--muted-foreground));
+}
+
+.approval-card-footer {
+  padding-top: 12px;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.approval-observation-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  background:
+    linear-gradient(180deg, hsl(var(--primary) / 8%), transparent 42%),
+    hsl(var(--card));
+}
+
+.approval-observation-aside > div > p {
+  margin-bottom: 0;
+  font-size: 13px;
+}
+
+.approval-observation-status {
+  display: flex;
+  gap: 10px;
+  padding: 13px;
+  background: hsl(var(--success) / 8%);
+  border: 1px solid hsl(var(--success) / 24%);
+  border-radius: 12px;
+}
+
+.approval-observation-status.is-unavailable {
+  background: hsl(var(--warning) / 9%);
+  border-color: hsl(var(--warning) / 34%);
+}
+
+.approval-observation-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  background: hsl(var(--success));
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px hsl(var(--success) / 12%);
+}
+
+.approval-observation-status.is-unavailable .approval-observation-dot {
+  background: hsl(var(--warning));
+  box-shadow: 0 0 0 4px hsl(var(--warning) / 12%);
+}
+
+.approval-observation-status strong {
+  font-size: 13px;
+  color: hsl(var(--foreground));
+}
+
+.approval-observation-status p,
+.approval-safety-rule p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: hsl(var(--muted-foreground));
+}
+
+.approval-safety-rule {
+  padding: 14px;
+  background: hsl(var(--muted) / 58%);
+  border-radius: 12px;
+}
+
+.approval-safety-rule span {
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.approval-observation-detail {
+  scroll-margin-top: 20px;
+}
+
+.approval-observation-detail :deep(.vben-vxe-grid) {
+  margin-top: 16px;
+}
+
+@media (max-width: 1440px) {
+  .approval-metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
+  .approval-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .approval-observation-aside {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .approval-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 22px;
+  }
+
+  .approval-focus-metric {
+    align-items: flex-start;
+    padding: 16px 0 0;
+    border-top: 1px solid hsl(var(--border));
+    border-left: 0;
+  }
+
+  .approval-section-heading,
+  .approval-queue-heading,
+  .approval-card-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .approval-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .approval-filter {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .approval-funnel,
+  .approval-queue,
+  .approval-observation-aside,
+  .approval-observation-detail {
+    padding: 16px;
+  }
+
+  .approval-metric-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
