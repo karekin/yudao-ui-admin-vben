@@ -118,6 +118,16 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'supplier-performance',
+        name: 'CloudMoldSupplierPerformance',
+        component: () =>
+          import('#/views/cloudmold/supplier-performance/index.vue'),
+        meta: {
+          title: '供应商绩效',
+          authority: ['cloudmold:supplier-performance:query'],
+        },
+      },
+      {
         path: 'dreamplant-exploration',
         name: 'CloudMoldDreamPlantExploration',
         component: () => import('#/views/cloudmold/dreamplant/index.vue'),

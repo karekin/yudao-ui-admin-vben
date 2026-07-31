@@ -220,6 +220,447 @@ export function normalizeManagedWorkflowList(
   return payload.items ?? payload.list ?? payload.records ?? payload.data ?? [];
 }
 
+const managedWorkflowOwnerRoleLabels: Record<string, string> = {
+  'advertising-settlement-operator': '广告结算运营',
+  'aftersales-operator': '售后运营',
+  'assortment-manager': '选品与波段企划经理',
+  'bonded-customs-operations': '保税关务运营',
+  'campaign-operations': '促销活动运营',
+  'category-operations': '品类运营',
+  'consumer-compensation-operator': '消费者赔付运营',
+  'consumer-experience-operator': '消费者体验运营',
+  'crossborder-operations': '跨境运营',
+  'customer-service-agent': '客服专员',
+  'data-ai-operations': '数据质量与 AI 运营',
+  'finance-operations': '财务结算运营',
+  'growth-experiment-operator': '增长实验运营',
+  'logistics-operations': '物流运营',
+  'logistics-settlement-operator': '物流结算运营',
+  'merchant-experience-operator': '商家体验运营',
+  'merchant-onboarding-operator': '商家入驻运营',
+  'merchant-settlement-operator': '商家结算运营',
+  'operations-control': '经营总控',
+  'order-exception-operator': '订单异常运营',
+  'partner-marketing-operations': '海外合作投放运营',
+  'pricing-revenue-operator': '定价与收益运营',
+  'procurement-order-operator': '采购订单运营',
+  'product-listing-operator': '商品铺品运营',
+  'product-operations': '商品运营',
+  'production-supervisor': '生产主管',
+  'profit-loss-operator': '损益改善运营',
+  'quality-operations': '质量运营',
+  'replenishment-operator': '补货运营',
+  'risk-operations': '风险争议与损失运营',
+  'supplier-sourcing-operator': '供应商寻源运营',
+  'supply-chain-operator': '供应链运营',
+  'supply-planning-manager': '需求计划经理',
+  'synthetic-consumer': '受控消费者场景',
+  'warehouse-operations': '仓储运营',
+  'enterprise-platform-operator': '企业平台工程运营',
+  'hr-organization-operator': '人力与组织运营',
+  'legal-ip-operator': '法务与知识产权运营',
+  'privacy-security-operator': '隐私与信息安全运营',
+  'strategy-pmo-control-operator': '战略、PMO 与内控运营',
+};
+
+export interface RoleCapabilityProfile {
+  capabilityStage?: 'FOUNDATION_REQUIRED' | 'MANAGED';
+  domain: string;
+  dailyDuty: string;
+  externalFactGate: string;
+  foundationRequirements?: {
+    approvalBoundary: string;
+    authoritySources: string[];
+    controlledArtifact: string;
+  };
+  ownerRole: string;
+  verifiableOutcome: string;
+}
+
+export interface RoleCapabilityEntry extends RoleCapabilityProfile {
+  automation: CloudMoldAiOperationsApi.TemporalAutomationWorkflow[];
+  workflowCount: number;
+  workflowIds: string[];
+}
+
+export const roleCapabilityProfiles: RoleCapabilityProfile[] = [
+  {
+    domain: '财务经营',
+    ownerRole: 'advertising-settlement-operator',
+    dailyDuty: '复核广告账单与结算差异',
+    verifiableOutcome: '内部结算案件、凭证',
+    externalFactGate: '媒体账单、发票和付款',
+  },
+  {
+    domain: '交易与消费者',
+    ownerRole: 'aftersales-operator',
+    dailyDuty: '处理退货、退款和逆向入库',
+    verifiableOutcome: '售后单、退款、库存终态',
+    externalFactGate: 'PSP 与真实消费者身份',
+  },
+  {
+    domain: '商品与企划',
+    ownerRole: 'assortment-manager',
+    dailyDuty: '编排波段、候选款和采购建议',
+    verifiableOutcome: '企划、候选款、采购读回',
+    externalFactGate: '趋势、成本、需求和预算',
+  },
+  {
+    domain: '履约、质量与合规',
+    ownerRole: 'bonded-customs-operations',
+    dailyDuty: '编排保税单证、异常和会签',
+    verifiableOutcome: '关务案件、单证状态',
+    externalFactGate: '海关申报、放行和法定责任',
+  },
+  {
+    domain: '增长与营销',
+    ownerRole: 'campaign-operations',
+    dailyDuty: '创建活动并回收受控触达结果',
+    verifiableOutcome: '活动、触达、订单读回',
+    externalFactGate: '外部投放平台真实转化',
+  },
+  {
+    domain: '商品与企划',
+    ownerRole: 'category-operations',
+    dailyDuty: '汇总商品、活动、实验和消费者反馈',
+    verifiableOutcome: '品类行动单、领域终态',
+    externalFactGate: '各领域最终经营事实',
+  },
+  {
+    domain: '交易与消费者',
+    ownerRole: 'consumer-compensation-operator',
+    dailyDuty: '处理无法履约的退款与赔付',
+    verifiableOutcome: '订单、退款、赔付终态',
+    externalFactGate: '赔付资金与客户身份',
+  },
+  {
+    domain: '交易与消费者',
+    ownerRole: 'consumer-experience-operator',
+    dailyDuty: '处理投诉判责与体验整改',
+    verifiableOutcome: '工单、判责、整改读回',
+    externalFactGate: '人工事实认定与真实客诉渠道',
+  },
+  {
+    domain: '履约、质量与合规',
+    ownerRole: 'crossborder-operations',
+    dailyDuty: '编排跨境订单、单证与异常',
+    verifiableOutcome: '订单、物流与单证状态',
+    externalFactGate: '承运商轨迹、税务和通关回执',
+  },
+  {
+    domain: '交易与消费者',
+    ownerRole: 'customer-service-agent',
+    dailyDuty: '受控咨询、工单分流和升级',
+    verifiableOutcome: '客服工单及闭环状态',
+    externalFactGate: '客户隐私和真实身份',
+  },
+  {
+    domain: '风险与数据 AI',
+    ownerRole: 'data-ai-operations',
+    dailyDuty: '执行 DQC、血缘核验和恢复行动',
+    verifiableOutcome: 'DQC 规则、运行、行动单',
+    externalFactGate: '生产湖仓作业与真实经营指标',
+  },
+  {
+    domain: '财务经营',
+    ownerRole: 'finance-operations',
+    dailyDuty: '关账编排与结算差异处置',
+    verifiableOutcome: '内部凭证、结算案件、行动单',
+    externalFactGate: '银行、PSP、税务与法定账簿',
+  },
+  {
+    domain: '增长与营销',
+    ownerRole: 'growth-experiment-operator',
+    dailyDuty: '配置实验、受控分流和效果回读',
+    verifiableOutcome: '实验、分组和归因读回',
+    externalFactGate: '媒体增量归因与真实实验结论',
+  },
+  {
+    domain: '履约、质量与合规',
+    ownerRole: 'logistics-operations',
+    dailyDuty: '发现履约异常并推动处置',
+    verifiableOutcome: '异常案件、履约状态',
+    externalFactGate: '承运商实时轨迹和签收事实',
+  },
+  {
+    domain: '财务经营',
+    ownerRole: 'logistics-settlement-operator',
+    dailyDuty: '复核物流服务费用差异',
+    verifiableOutcome: '物流结算案件、凭证',
+    externalFactGate: '承运商账单、发票和付款',
+  },
+  {
+    domain: '商家与供给',
+    ownerRole: 'merchant-experience-operator',
+    dailyDuty: '跟踪商责、赔付与整改复核',
+    verifiableOutcome: '商责案件、整改读回',
+    externalFactGate: '外部商家履约事实',
+  },
+  {
+    domain: '商家与供给',
+    ownerRole: 'merchant-onboarding-operator',
+    dailyDuty: '审核准入资料并激活商家店铺',
+    verifiableOutcome: '商家、店铺状态',
+    externalFactGate: 'KYC、合同和法定准入',
+  },
+  {
+    domain: '财务经营',
+    ownerRole: 'merchant-settlement-operator',
+    dailyDuty: '汇总售卖、退款和服务费结算',
+    verifiableOutcome: '商家结算案件、凭证',
+    externalFactGate: '银行支付和三方对账',
+  },
+  {
+    domain: '经营总控',
+    ownerRole: 'operations-control',
+    dailyDuty: '汇总跨域日经营动作和终态检查',
+    verifiableOutcome: '跨域行动单、领域读回',
+    externalFactGate: '领域负责人和审批人结论',
+  },
+  {
+    domain: '交易与消费者',
+    ownerRole: 'order-exception-operator',
+    dailyDuty: '处理已付未发、取消与退款异常',
+    verifiableOutcome: '订单、库存、退款终态',
+    externalFactGate: '真实支付事实',
+  },
+  {
+    domain: '增长与营销',
+    ownerRole: 'partner-marketing-operations',
+    dailyDuty: '维护 KOL/媒体合作与受控归因',
+    verifiableOutcome: '合作案件、内容、结算读回',
+    externalFactGate: '平台投放、媒体结算和真实归因',
+  },
+  {
+    domain: '定价与收益',
+    ownerRole: 'pricing-revenue-operator',
+    dailyDuty: '对已发布商品执行受控调价',
+    verifiableOutcome: '不可变 offer revision、渠道回执',
+    externalFactGate: '成本、税费、毛利和收益归因',
+  },
+  {
+    domain: '采购与制造',
+    ownerRole: 'procurement-order-operator',
+    dailyDuty: '下发采购订单并回收供应商确认',
+    verifiableOutcome: '采购订单、确认状态',
+    externalFactGate: '实物收货和供应商绩效',
+  },
+  {
+    domain: '商品与企划',
+    ownerRole: 'product-listing-operator',
+    dailyDuty: '将已就绪商品发布到受控渠道',
+    verifiableOutcome: '刊登、渠道发布回执',
+    externalFactGate: '真实渠道刊登和素材生产',
+  },
+  {
+    domain: '商品与企划',
+    ownerRole: 'product-operations',
+    dailyDuty: '维护商品开发、质量和上架条件',
+    verifiableOutcome: '商品、质量、刊登前状态',
+    externalFactGate: '竞品、趋势和真实素材',
+  },
+  {
+    domain: '采购与制造',
+    ownerRole: 'production-supervisor',
+    dailyDuty: '试产/量产排程、报工和入库编排',
+    verifiableOutcome: '工单、报工、入库读回',
+    externalFactGate: 'BOM、OEE、委外和成本结转',
+  },
+  {
+    domain: '财务经营',
+    ownerRole: 'profit-loss-operator',
+    dailyDuty: '识别偏差并形成改善行动',
+    verifiableOutcome: '改善行动单、责任、终态',
+    externalFactGate: '真实总账和经营指标',
+  },
+  {
+    domain: '履约、质量与合规',
+    ownerRole: 'quality-operations',
+    dailyDuty: '检验、CAPA、召回和库存隔离',
+    verifiableOutcome: '质检、CAPA、召回、隔离读回',
+    externalFactGate: '外部实验室与全量批次追溯',
+  },
+  {
+    domain: '供应链与仓网',
+    ownerRole: 'replenishment-operator',
+    dailyDuty: '生成补货建议并回读库存',
+    verifiableOutcome: '计划、采购/调拨草稿、库存轨迹',
+    externalFactGate: '供应商 OTIF 的规范收货事实',
+  },
+  {
+    domain: '风险与数据 AI',
+    ownerRole: 'risk-operations',
+    dailyDuty: '处理拒付、争议、止损和损失台账',
+    verifiableOutcome: '风险案件、争议、损失台账',
+    externalFactGate: '生产风控模型、支付机构和法律结论',
+  },
+  {
+    domain: '商家与供给',
+    ownerRole: 'supplier-sourcing-operator',
+    dailyDuty: '寻源、询报价、样品评估和定标',
+    verifiableOutcome: '寻源案件、报价、样品、授标',
+    externalFactGate: '持续履约与质量绩效',
+  },
+  {
+    domain: '供应链与仓网',
+    ownerRole: 'supply-chain-operator',
+    dailyDuty: '统筹供给异常和入仓决策',
+    verifiableOutcome: '供给行动、入仓决策读回',
+    externalFactGate: '完整多仓网络和承运商事实',
+  },
+  {
+    domain: '供应链与仓网',
+    ownerRole: 'supply-planning-manager',
+    dailyDuty: '生成预测、S&OP 与供需计划',
+    verifiableOutcome: '预测、计划与建议单',
+    externalFactGate: '真实全量数据仓供需平衡',
+  },
+  {
+    domain: '交易与消费者',
+    ownerRole: 'synthetic-consumer',
+    dailyDuty: '产生明确标识的受控选购/下单场景',
+    verifiableOutcome: '受控订单、库存、履约读回',
+    externalFactGate: '真实消费者和真实市场需求',
+  },
+  {
+    domain: '供应链与仓网',
+    ownerRole: 'warehouse-operations',
+    dailyDuty: '收货、上架、移库和盘点作业',
+    verifiableOutcome: '入库、库存、作业轨迹',
+    externalFactGate: '物理作业和设备/WMS 回执',
+  },
+  {
+    capabilityStage: 'FOUNDATION_REQUIRED',
+    domain: '企业平台与工程',
+    ownerRole: 'enterprise-platform-operator',
+    dailyDuty: '分诊 SLO、变更风险、容量成本与灾备演练候选',
+    verifiableOutcome: '受控变更评审单、SLO 异常工单、演练证据',
+    externalFactGate: '生产发布、回滚、灾备切换与运行负责人确认',
+    foundationRequirements: {
+      authoritySources: ['CMDB', '可观测性平台', 'CI/CD 与变更系统'],
+      controlledArtifact: '变更风险评审单与 SLO 异常工单',
+      approvalBoundary: '生产变更、回滚和灾备切换由变更负责人批准',
+    },
+  },
+  {
+    capabilityStage: 'FOUNDATION_REQUIRED',
+    domain: '人力与组织',
+    ownerRole: 'hr-organization-operator',
+    dailyDuty: '汇总编制、排班、培训到期与用工风险候选',
+    verifiableOutcome: '用工需求、排班异常、培训提醒工单',
+    externalFactGate: '录用、绩效、薪酬和劳动处分的法定审批',
+    foundationRequirements: {
+      authoritySources: ['HRIS', '排班系统', 'LMS'],
+      controlledArtifact: '用工需求与培训到期提醒工单',
+      approvalBoundary: '录用、绩效、薪酬和劳动处分由 HR 与法定流程决定',
+    },
+  },
+  {
+    capabilityStage: 'FOUNDATION_REQUIRED',
+    domain: '法务与知识产权',
+    ownerRole: 'legal-ip-operator',
+    dailyDuty: '归集合同义务、条款偏差、侵权证据与续约提醒',
+    verifiableOutcome: '合同义务台账、条款偏差与证据包草稿',
+    externalFactGate: '对外签约、法律意见、诉讼和和解决定',
+    foundationRequirements: {
+      authoritySources: ['合同生命周期系统', '商标/IP 档案', '争议证据库'],
+      controlledArtifact: '合同义务台账与证据包草稿',
+      approvalBoundary: '对外签约、法律意见、诉讼和和解决定由法务责任人作出',
+    },
+  },
+  {
+    capabilityStage: 'FOUNDATION_REQUIRED',
+    domain: '隐私与信息安全',
+    ownerRole: 'privacy-security-operator',
+    dailyDuty: '发现权限复核、敏感数据访问和供应商安全候选',
+    verifiableOutcome: '权限复核单、访问异常和安全演练工单',
+    externalFactGate: '生产授权、密钥操作、数据披露和事件定级',
+    foundationRequirements: {
+      authoritySources: ['IAM', 'SIEM', '数据分类与隐私请求系统'],
+      controlledArtifact: '权限复核单与安全事件演练工单',
+      approvalBoundary:
+        '生产授权、密钥操作、数据披露和事件定级由安全责任人批准',
+    },
+  },
+  {
+    capabilityStage: 'FOUNDATION_REQUIRED',
+    domain: '战略、PMO 与内控',
+    ownerRole: 'strategy-pmo-control-operator',
+    dailyDuty: '拆解 KPI 偏差、项目依赖、审计整改和预算情景',
+    verifiableOutcome: '整改行动单、项目风险与预算情景草案',
+    externalFactGate: '目标取舍、预算批准和独立审计结论',
+    foundationRequirements: {
+      authoritySources: ['PPM', '预算系统', '内审整改台账'],
+      controlledArtifact: '项目风险、整改行动与预算情景草案',
+      approvalBoundary: '目标取舍、预算批准和独立审计结论由管理层或内审作出',
+    },
+  },
+];
+
+export function managedWorkflowOwnerRoleLabel(value?: string) {
+  if (!value) return '未标注岗位';
+  return managedWorkflowOwnerRoleLabels[value] ?? value;
+}
+
+export function buildRoleCapabilityMap(
+  workflows: CloudMoldAiOperationsApi.ManagedWorkflow[],
+  automationWorkflows: CloudMoldAiOperationsApi.TemporalAutomationWorkflow[] = [],
+): RoleCapabilityEntry[] {
+  const workflowIdsByRole = new Map<string, string[]>();
+  const automationBySkillId = new Map(
+    automationWorkflows.map((workflow) => [workflow.skillId, workflow]),
+  );
+  workflows.forEach((workflow) => {
+    if (!workflow.ownerRole) return;
+    const workflowIds = workflowIdsByRole.get(workflow.ownerRole) ?? [];
+    workflowIds.push(workflow.skillId);
+    workflowIdsByRole.set(workflow.ownerRole, workflowIds);
+  });
+  return roleCapabilityProfiles.map((profile) => {
+    const workflowIds = workflowIdsByRole.get(profile.ownerRole) ?? [];
+    return {
+      ...profile,
+      automation: workflowIds.flatMap((skillId) => {
+        const automation = automationBySkillId.get(skillId);
+        return automation ? [automation] : [];
+      }),
+      workflowCount: workflowIds.length,
+      workflowIds,
+    };
+  });
+}
+
+const legacyAgentControlRoleLabels: Record<string, string> = {
+  buyer: '买手',
+  'customer-service': '客服',
+  'inventory-control': '库控',
+  'merchant-acquisition': '招商',
+  merchandising: '商品运营',
+  planning: '企划',
+};
+
+export function agentControlRoleLabel(value?: string) {
+  if (!value) return '-';
+  const managedRoleLabel = managedWorkflowOwnerRoleLabels[value];
+  return managedRoleLabel ?? legacyAgentControlRoleLabels[value] ?? value;
+}
+
+export function buildApprovalRoleOptions() {
+  return [
+    { label: '全部岗位', value: undefined },
+    ...roleCapabilityProfiles
+      .filter((profile) => profile.capabilityStage !== 'FOUNDATION_REQUIRED')
+      .map((profile) => ({
+        label: managedWorkflowOwnerRoleLabel(profile.ownerRole),
+        value: profile.ownerRole,
+      })),
+    ...Object.entries(legacyAgentControlRoleLabels).map(([value, label]) => ({
+      label,
+      value,
+    })),
+  ];
+}
+
 export function useManagedWorkflowColumns(): VxeTableGridOptions['columns'] {
   return withCloudMoldTableColumns([
     {
@@ -229,6 +670,12 @@ export function useManagedWorkflowColumns(): VxeTableGridOptions['columns'] {
       title: '中文名称',
     },
     { field: 'description', minWidth: 300, title: '用途说明' },
+    {
+      field: 'ownerRole',
+      minWidth: 150,
+      slots: { default: 'managed-workflow-owner-role' },
+      title: '负责岗位',
+    },
     { field: 'skillVersion', minWidth: 80, title: '版本' },
     { field: 'riskLevel', minWidth: 90, title: '风险等级' },
     {
@@ -254,7 +701,11 @@ export function useManagedWorkflowColumns(): VxeTableGridOptions['columns'] {
 }
 
 export function useManagedWorkflowFormSchema(): VbenFormSchema[] {
-  return [codeInput('skillId', 'Skill ID'), codeInput('riskLevel', '风险等级')];
+  return [
+    codeInput('skillId', 'Skill ID'),
+    codeInput('ownerRole', '岗位代码'),
+    codeInput('riskLevel', '风险等级'),
+  ];
 }
 
 export function useTemporalScheduleColumns(): VxeTableGridOptions['columns'] {

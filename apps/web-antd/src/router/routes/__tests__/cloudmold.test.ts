@@ -1,7 +1,10 @@
 import type { RouteRecordRaw } from 'vue-router';
 
+import { createMemoryHistory, createRouter } from 'vue-router';
+
 import { describe, expect, it } from 'vitest';
 
+import { accessRoutes, routes as appRoutes, coreRouteNames } from '../index';
 import routes from '../modules/cloudmold';
 import operationsRoutes from '../modules/cloudmold-operations';
 import legacyMallRoutes from '../modules/mall';
@@ -149,11 +152,31 @@ describe('cloudmold administration navigation', () => {
     ).length;
 
     expect(groupedPageCount).toBe(11);
-    expect(directOperationsPageCount).toBe(12);
+    expect(directOperationsPageCount).toBe(13);
     expect(operationsRoot.meta?.hideInMenu).toBe(true);
     expect(hiddenDirectPageCount).toBe(4);
     expect(
       groupedPageCount! + directOperationsPageCount! + hiddenDirectPageCount!,
-    ).toBe(27);
+    ).toBe(28);
+  });
+
+  it('registers L3 diagnostics as stable routes outside backend menus', () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: appRoutes,
+    });
+
+    expect(
+      appRoutes
+        .find((route) => route.name === 'CloudMoldOperationsQuery')
+        ?.children?.some((route) => route.name === 'CloudMoldAiWorkflowRun'),
+    ).toBe(true);
+    expect(
+      accessRoutes.some((route) => route.name === 'CloudMoldOperationsQuery'),
+    ).toBe(false);
+    expect(coreRouteNames).toContain('CloudMoldAiWorkflowRun');
+    expect(router.resolve('/cloudmold/operations/ai-workflow-run').name).toBe(
+      'CloudMoldAiWorkflowRun',
+    );
   });
 });

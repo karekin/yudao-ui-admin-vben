@@ -14,12 +14,14 @@ export namespace CloudMoldAiOperationsApi {
     durableAuthority: 'SKILL_TASK';
     managementSurface: 'DEER_FLOW';
     maxAttempts: number;
+    ownerRole?: string;
     orchestrationSurface: 'ADMIN_CONSOLE';
     riskLevel: string;
     skillId: string;
     skillVersion: string;
     stepCount: number;
     triggerSource: 'ADMIN_CONSOLE';
+    workflowLevel?: string;
     writeStepCount: number;
   }
 

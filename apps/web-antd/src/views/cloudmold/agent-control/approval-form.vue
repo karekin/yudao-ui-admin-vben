@@ -14,8 +14,12 @@ import {
 } from 'ant-design-vue';
 
 import { getCloudMoldAgentApprovalDetail } from '#/api/cloudmold/agent-control';
+import { getSimpleUser } from '#/api/system/user';
 
-import { buildApprovalPresentation } from './approval-presentation';
+import {
+  buildApprovalPresentation,
+  buildGenericApprovalPresentation,
+} from './approval-presentation';
 
 const props = defineProps<{ id?: string }>();
 
@@ -23,8 +27,14 @@ const loading = ref(false);
 const loadFailed = ref(false);
 const approval = ref<CloudMoldAgentControlApi.ApprovalDetail>();
 const hasApprovalContext = ref(false);
+const userNames = ref<Record<number, string>>({});
 
 const presentation = computed(() => buildApprovalPresentation(approval.value));
+const genericPresentation = computed(() =>
+  presentation.value
+    ? undefined
+    : buildGenericApprovalPresentation(approval.value),
+);
 const roleLabel = computed(() =>
   approval.value?.roleCode === 'merchandising'
     ? '商品运营'
@@ -49,6 +59,34 @@ function approvalIdFromBusinessKey(value?: string) {
   return parts.length >= 3 ? parts.slice(2).join(':') : value;
 }
 
+function userName(userId?: number) {
+  if (!userId) return '-';
+  return userNames.value[userId] || '加载用户名称中…';
+}
+
+async function loadUserNames(detail?: CloudMoldAgentControlApi.ApprovalDetail) {
+  const userIds = [
+    ...new Set(
+      [detail?.requesterUserId, detail?.approverUserId].filter(
+        (userId): userId is number => Number.isInteger(userId),
+      ),
+    ),
+  ];
+  await Promise.all(
+    userIds.map(async (userId) => {
+      try {
+        const user = await getSimpleUser(userId);
+        userNames.value = {
+          ...userNames.value,
+          [userId]: user.nickname || user.username || '未知用户',
+        };
+      } catch {
+        userNames.value = { ...userNames.value, [userId]: '未知用户' };
+      }
+    }),
+  );
+}
+
 async function loadApproval() {
   const approvalId = approvalIdFromBusinessKey(props.id);
   hasApprovalContext.value = Boolean(approvalId);
@@ -60,6 +98,7 @@ async function loadApproval() {
   loading.value = true;
   try {
     approval.value = await getCloudMoldAgentApprovalDetail(approvalId);
+    await loadUserNames(approval.value);
     loadFailed.value = !approval.value;
   } catch {
     approval.value = undefined;
@@ -105,6 +144,14 @@ watch(() => props.id, loadApproval, { immediate: true });
         show-icon
         :message="presentation.actionTitle"
         description="审批通过后，Agent 将写入规范商品目录并推进商品主数据生命周期。这些写入会形成正式的 Style、SPU、SKU 和条码记录。"
+      />
+      <Alert
+        v-else-if="genericPresentation"
+        class="mb-4"
+        type="info"
+        show-icon
+        :message="genericPresentation.actionTitle"
+        :description="genericPresentation.summary"
       />
       <Alert
         v-else
@@ -173,6 +220,37 @@ watch(() => props.id, loadApproval, { immediate: true });
         />
       </template>
 
+      <template v-else-if="genericPresentation">
+        <Typography.Title :level="5" class="!mb-2">
+          已冻结的业务范围
+        </Typography.Title>
+        <Descriptions :column="2" bordered size="small">
+          <DescriptionsItem label="业务步骤">
+            {{ genericPresentation.operationCount || '-' }} 项
+          </DescriptionsItem>
+          <DescriptionsItem label="计划动作" :span="1">
+            {{
+              genericPresentation.operationNames.join('、') || '已冻结业务输入'
+            }}
+          </DescriptionsItem>
+          <DescriptionsItem
+            v-for="entry in genericPresentation.entries"
+            :key="entry.label"
+            :label="entry.label"
+            :span="2"
+          >
+            {{ entry.value }}
+          </DescriptionsItem>
+        </Descriptions>
+        <Alert
+          class="mt-4"
+          type="info"
+          show-icon
+          message="本次审批的执行边界"
+          description="本页只展示服务端已冻结的业务范围和步骤；审批通过后仍须由 Temporal、一次性执行凭证和领域服务分别校验后才会写入业务数据。"
+        />
+      </template>
+
       <Typography.Title :level="5" class="!mb-2 !mt-4">
         审批追踪
       </Typography.Title>
@@ -193,10 +271,10 @@ watch(() => props.id, loadApproval, { immediate: true });
           {{ approval.actionCode }}
         </DescriptionsItem>
         <DescriptionsItem label="申请人">
-          {{ approval.requesterUserId ?? '-' }}
+          {{ userName(approval.requesterUserId) }}
         </DescriptionsItem>
         <DescriptionsItem label="审批人">
-          {{ approval.approverUserId ?? '-' }}
+          {{ userName(approval.approverUserId) }}
         </DescriptionsItem>
         <DescriptionsItem label="审批 ID" :span="2">
           {{ approval.approvalId }}

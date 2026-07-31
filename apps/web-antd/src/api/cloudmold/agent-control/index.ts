@@ -9,6 +9,7 @@ export namespace CloudMoldAgentControlApi {
 
   export interface BusinessCard {
     actionCode: string;
+    activeAssigneeUserIds?: string;
     approverUserId?: number;
     cardId: string;
     cardType: CardType;
@@ -33,6 +34,15 @@ export namespace CloudMoldAgentControlApi {
     limit?: number;
     roleCode?: string;
     status?: string;
+  }
+
+  export interface ApprovalBoardStats {
+    approverAssignmentRequired: number;
+    bpmInProgress: number;
+    bpmTerminalPendingSafety: number;
+    pendingTotal: number;
+    releasedWaitingExecution: number;
+    startUncertain: number;
   }
 
   export interface ApprovalDetail {
@@ -83,6 +93,13 @@ export function getCloudMoldAgentBusinessCards(
   return requestClient.get<CloudMoldAgentControlApi.BusinessCard[]>(
     '/cloudmold/agent-control/business-cards',
     { headers: OPTIONAL_FEATURE_HEADERS, params },
+  );
+}
+
+export function getCloudMoldAgentApprovalBoardStats() {
+  return requestClient.get<CloudMoldAgentControlApi.ApprovalBoardStats>(
+    '/cloudmold/agent-control/approval-board-stats',
+    { headers: OPTIONAL_FEATURE_HEADERS },
   );
 }
 

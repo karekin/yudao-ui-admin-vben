@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  agentControlRoleLabel,
   aiOperationsConsoleNotice,
   approvalGateSummary,
+  buildApprovalRoleOptions,
+  buildRoleCapabilityMap,
+  managedWorkflowOwnerRoleLabel,
   normalizeManagedWorkflowList,
+  roleCapabilityProfiles,
   temporalBusinessAutonomySummary,
   temporalDiscoverySourceSummary,
   temporalDispatchOutcomeSummary,
@@ -53,6 +58,118 @@ describe('ai operations presentation helpers', () => {
     expect(normalizeManagedWorkflowList({ items: [item] })).toEqual([item]);
     expect(normalizeManagedWorkflowList({ list: [item] })).toEqual([item]);
     expect(normalizeManagedWorkflowList(undefined)).toEqual([]);
+  });
+
+  it('presents every registered business role with a business-facing name', () => {
+    expect(managedWorkflowOwnerRoleLabel('supplier-sourcing-operator')).toBe(
+      '供应商寻源运营',
+    );
+    expect(managedWorkflowOwnerRoleLabel('pricing-revenue-operator')).toBe(
+      '定价与收益运营',
+    );
+    expect(managedWorkflowOwnerRoleLabel('future-role')).toBe('future-role');
+  });
+
+  it('maps 35 managed operating roles plus five visible horizontal capability gaps', () => {
+    const map = buildRoleCapabilityMap(
+      [
+        {
+          approvalRequired: true,
+          description: '供应商寻源与定标。',
+          definitionClosureSha256: 'a'.repeat(64),
+          definitionSha256: 'b'.repeat(64),
+          displayName: '供应商寻源日运营',
+          durableAuthority: 'SKILL_TASK',
+          managementSurface: 'DEER_FLOW',
+          maxAttempts: 3,
+          orchestrationSurface: 'ADMIN_CONSOLE',
+          ownerRole: 'supplier-sourcing-operator',
+          riskLevel: 'R2',
+          skillId: 'skill.cloudmold.supplier.sourcing-daily-operations.v1',
+          skillVersion: '1.0.0',
+          stepCount: 12,
+          triggerSource: 'ADMIN_CONSOLE',
+          workflowLevel: 'BUSINESS_ROLE',
+          writeStepCount: 4,
+        },
+      ],
+      [
+        {
+          businessAutonomyState: 'AUTONOMY_PROVEN',
+          candidateCount: 2,
+          discoverySource: 'DOMAIN_BACKLOG',
+          dispatchedCount: 2,
+          displayName: '供应商寻源日运营',
+          failedCount: 0,
+          gapCodes: [],
+          scheduleState: 'HEALTHY',
+          skillId: 'skill.cloudmold.supplier.sourcing-daily-operations.v1',
+          skillVersion: '1.0.0',
+        },
+      ],
+    );
+
+    expect(roleCapabilityProfiles).toHaveLength(40);
+    expect(
+      new Set(roleCapabilityProfiles.map((item) => item.ownerRole)).size,
+    ).toBe(40);
+    expect(
+      roleCapabilityProfiles.filter(
+        (item) => item.capabilityStage !== 'FOUNDATION_REQUIRED',
+      ),
+    ).toHaveLength(35);
+    expect(map).toHaveLength(40);
+    expect(
+      map.find((item) => item.ownerRole === 'supplier-sourcing-operator'),
+    ).toMatchObject({
+      automation: [
+        {
+          businessAutonomyState: 'AUTONOMY_PROVEN',
+          scheduleState: 'HEALTHY',
+        },
+      ],
+      workflowCount: 1,
+      workflowIds: ['skill.cloudmold.supplier.sourcing-daily-operations.v1'],
+    });
+    expect(
+      map.find((item) => item.ownerRole === 'warehouse-operations'),
+    ).toMatchObject({ workflowCount: 0 });
+    expect(
+      map.find((item) => item.ownerRole === 'privacy-security-operator'),
+    ).toMatchObject({
+      capabilityStage: 'FOUNDATION_REQUIRED',
+      foundationRequirements: {
+        authoritySources: ['IAM', 'SIEM', '数据分类与隐私请求系统'],
+      },
+      workflowCount: 0,
+    });
+    expect(
+      map
+        .filter((item) => item.capabilityStage === 'FOUNDATION_REQUIRED')
+        .every((item) => item.foundationRequirements?.authoritySources.length),
+    ).toBe(true);
+  });
+
+  it('offers every managed role and preserves historical approval roles', () => {
+    const options = buildApprovalRoleOptions();
+
+    expect(options).toHaveLength(42);
+    expect(options).toEqual(
+      expect.arrayContaining([
+        { label: '风险争议与损失运营', value: 'risk-operations' },
+        { label: '仓储运营', value: 'warehouse-operations' },
+        { label: '买手', value: 'buyer' },
+      ]),
+    );
+    expect(agentControlRoleLabel('supplier-sourcing-operator')).toBe(
+      '供应商寻源运营',
+    );
+    expect(agentControlRoleLabel('inventory-control')).toBe('库控');
+    expect(options).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ value: 'privacy-security-operator' }),
+      ]),
+    );
   });
 
   it('puts concrete business outcomes ahead of technical evidence', () => {
@@ -120,6 +237,7 @@ describe('ai operations presentation helpers', () => {
     expect(fieldNames(useManagedWorkflowColumns())).toEqual([
       'displayName',
       'description',
+      'ownerRole',
       'skillVersion',
       'riskLevel',
       'stepCount',

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildApprovalPresentation } from './approval-presentation';
+import {
+  buildApprovalPresentation,
+  buildGenericApprovalPresentation,
+} from './approval-presentation';
 
 describe('buildApprovalPresentation', () => {
   it('turns a catalog matrix snapshot into an approver-readable summary', () => {
@@ -67,5 +70,40 @@ describe('buildApprovalPresentation', () => {
         workOrderId: 'wo-2',
       }),
     ).toBeUndefined();
+  });
+
+  it('makes non-catalog workflow inputs reviewable without exposing raw commands', () => {
+    const result = buildGenericApprovalPresentation({
+      actionCode: 'crossborder.bonded-customs',
+      approvalId: 'approval-3',
+      businessContextJson: JSON.stringify({
+        runId: 'bonded-customs-001',
+        leaseToken: 'must-not-be-visible',
+        commands: [
+          { operation: 'CREATE_CASE', idempotencyKey: 'hidden' },
+          { operation: 'SUBMIT_DECLARATION', idempotencyKey: 'hidden' },
+        ],
+      }),
+      requestedAt: '2026-07-26T10:00:00Z',
+      riskLevel: 'R3',
+      roleCode: 'bonded-customs-operations',
+      status: 'PENDING',
+      title: '保税仓关务闭环',
+      workOrderId: 'wo-3',
+    });
+
+    expect(result).toMatchObject({
+      actionTitle: '保税仓关务闭环',
+      operationCount: 2,
+      operationNames: ['CREATE_CASE', 'SUBMIT_DECLARATION'],
+    });
+    expect(result?.entries).toContainEqual({
+      label: 'run Id',
+      value: 'bonded-customs-001',
+    });
+    expect(result?.entries).not.toContainEqual({
+      label: 'lease Token',
+      value: 'must-not-be-visible',
+    });
   });
 });

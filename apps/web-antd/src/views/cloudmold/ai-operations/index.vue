@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 import type { PageResult } from '@vben/request';
 
+import type { RoleCapabilityEntry } from './data';
+
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CloudMoldAgentControlApi } from '#/api/cloudmold/agent-control';
 import type { CloudMoldAiOperationsApi } from '#/api/cloudmold/ai-operations';
@@ -21,7 +23,6 @@ import {
   DescriptionsItem,
   Drawer,
   Empty,
-  InputNumber,
   message,
   Modal,
   Row,
@@ -34,6 +35,7 @@ import {
 
 import { TableAction, useVbenVxeGrid } from '#/adapter/vxe-table';
 import {
+  getCloudMoldAgentApprovalBoardStats,
   getCloudMoldAgentBusinessCards,
   isAgentControlForbidden,
   isAgentControlUnavailable,
@@ -49,15 +51,21 @@ import {
   resumeCloudMoldTemporalSchedule,
   triggerCloudMoldTemporalSchedule,
 } from '#/api/cloudmold/ai-operations';
+import { getSimpleUser } from '#/api/system/user';
 import { router } from '#/router';
+import { UserSelect } from '#/views/system/user/components';
 
 import CopyIdCell from '../shared/copy-id-cell.vue';
 import EvidenceAlert from '../shared/evidence-alert.vue';
 import StatusTag from '../shared/status-tag.vue';
 import {
+  agentControlRoleLabel,
   aiOperationsConsoleNotice,
   approvalGateSummary,
   approvalStatusMeta,
+  buildApprovalRoleOptions,
+  buildRoleCapabilityMap,
+  managedWorkflowOwnerRoleLabel,
   normalizeManagedWorkflowList,
   temporalBusinessAutonomySummary,
   temporalDiscoverySourceSummary,
@@ -193,6 +201,13 @@ const temporalAutomationOverview =
 const workflowDetailOpen = ref(false);
 const selectedWorkflow = ref<CloudMoldAiOperationsApi.ManagedWorkflow>();
 const managedWorkflowNames = ref<Record<string, string>>({});
+const roleCapabilityEntries = ref<RoleCapabilityEntry[]>([]);
+const roleCapabilityLoading = ref(false);
+const roleAutomationEvidenceUnavailable = ref(false);
+const roleCapabilityFlags = ref<SectionFlags>({
+  loadFailed: false,
+  unavailable: false,
+});
 
 function workflowName(skillId?: string) {
   if (!skillId) return '未识别工作流';
@@ -204,6 +219,56 @@ function openWorkflowDetail(
 ) {
   selectedWorkflow.value = workflow;
   workflowDetailOpen.value = true;
+}
+
+function registeredRoleCount() {
+  return roleCapabilityEntries.value.filter((entry) => entry.workflowCount > 0)
+    .length;
+}
+
+function foundationRoleCount() {
+  return roleCapabilityEntries.value.filter(
+    (entry) => entry.capabilityStage === 'FOUNDATION_REQUIRED',
+  ).length;
+}
+
+function registeredWorkflowCount() {
+  return roleCapabilityEntries.value.reduce(
+    (total, entry) => total + entry.workflowCount,
+    0,
+  );
+}
+
+async function loadRoleCapabilities() {
+  resetFlags(roleCapabilityFlags.value);
+  roleCapabilityLoading.value = true;
+  try {
+    const workflows = normalizeManagedWorkflowList(
+      await getCloudMoldManagedWorkflowList(),
+    );
+    roleAutomationEvidenceUnavailable.value = false;
+    let automationWorkflows: CloudMoldAiOperationsApi.TemporalAutomationWorkflow[] =
+      [];
+    try {
+      const automationOverview = await getCloudMoldTemporalAutomationOverview();
+      automationWorkflows = automationOverview.workflows ?? [];
+    } catch {
+      roleAutomationEvidenceUnavailable.value = true;
+    }
+    roleCapabilityEntries.value = buildRoleCapabilityMap(
+      workflows,
+      automationWorkflows,
+    );
+    managedWorkflowNames.value = Object.fromEntries(
+      workflows.map((item) => [item.skillId, item.displayName]),
+    );
+  } catch (error) {
+    roleCapabilityEntries.value = [];
+    roleAutomationEvidenceUnavailable.value = false;
+    applyFailure(roleCapabilityFlags.value, error);
+  } finally {
+    roleCapabilityLoading.value = false;
+  }
 }
 
 const [TemporalAutomationGrid, temporalAutomationGridApi] = useVbenVxeGrid({
@@ -626,6 +691,7 @@ const [ManagedWorkflowGrid, managedWorkflowGridApi] = useVbenVxeGrid({
             const filteredItems = items.filter((item) => {
               return (
                 matchFilter(item.skillId, formValues.skillId) &&
+                matchFilter(item.ownerRole, formValues.ownerRole) &&
                 matchFilter(item.riskLevel, formValues.riskLevel)
               );
             });
@@ -747,6 +813,7 @@ const [ManagedObservationGrid] = useVbenVxeGrid({
 });
 
 const cards = ref<CloudMoldAgentControlApi.BusinessCard[]>([]);
+const approvalBoardStats = ref<CloudMoldAgentControlApi.ApprovalBoardStats>();
 const cardsLoading = ref(false);
 const cardsLoaded = ref(false);
 const cardsLoadFailed = ref(false);
@@ -758,30 +825,15 @@ const approvalAssignOpen = ref(false);
 const approvalAssigning = ref(false);
 const approvalAssigneeUserId = ref<number>();
 const selectedApprovalCard = ref<CloudMoldAgentControlApi.BusinessCard>();
+const approvalUserNames = ref<Record<number, string>>({});
 
-const roleOptions = [
-  { label: '全部岗位', value: undefined },
-  { label: '库控', value: 'inventory-control' },
-  { label: '买手', value: 'buyer' },
-  { label: '客服', value: 'customer-service' },
-  { label: '企划', value: 'planning' },
-  { label: '招商', value: 'merchant-acquisition' },
-];
+const roleOptions = buildApprovalRoleOptions();
 
 const typeOptions = [
   { label: '待审批', value: 'APPROVAL' },
   { label: '岗位交接', value: 'HANDOFF' },
   { label: '业务结果', value: 'RESULT' },
 ];
-
-const roleNames: Record<string, string> = {
-  buyer: '买手',
-  'customer-service': '客服',
-  'inventory-control': '库控',
-  'merchant-acquisition': '招商',
-  merchandising: '商品运营',
-  planning: '企划',
-};
 
 const statusNames: Record<string, string> = {
   ACCEPTED: '已接单',
@@ -792,7 +844,7 @@ const statusNames: Record<string, string> = {
 };
 
 function roleName(code?: string) {
-  return code ? (roleNames[code] ?? code) : '-';
+  return agentControlRoleLabel(code);
 }
 
 function statusColor(status: string) {
@@ -807,9 +859,69 @@ function formatTime(value?: string) {
   return new Date(value).toLocaleString('zh-CN', { hour12: false });
 }
 
+function activeAssigneeUserIds(value?: string) {
+  return (value ?? '')
+    .split(',')
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isSafeInteger(item) && item > 0);
+}
+
+function approvalUserName(userId?: number) {
+  if (!userId) return '审批人待指定';
+  return approvalUserNames.value[userId] ?? '审批人名称加载中…';
+}
+
+function activeAssigneeNames(value?: string) {
+  return activeAssigneeUserIds(value)
+    .map((userId) => approvalUserName(userId))
+    .join('、');
+}
+
+async function loadApprovalUserNames(
+  items: CloudMoldAgentControlApi.BusinessCard[],
+) {
+  const userIds = new Set<number>();
+  items.forEach((item) => {
+    if (item.approverUserId) userIds.add(item.approverUserId);
+    activeAssigneeUserIds(item.activeAssigneeUserIds).forEach((userId) =>
+      userIds.add(userId),
+    );
+  });
+  await Promise.all(
+    [...userIds]
+      .filter((userId) => !approvalUserNames.value[userId])
+      .map(async (userId) => {
+        try {
+          const user = await getSimpleUser(userId);
+          approvalUserNames.value = {
+            ...approvalUserNames.value,
+            [userId]: user.nickname || user.username || '未知审批人',
+          };
+        } catch {
+          approvalUserNames.value = {
+            ...approvalUserNames.value,
+            [userId]: '未知审批人',
+          };
+        }
+      }),
+  );
+}
+
 function approvalWorkflowSummary(item: CloudMoldAgentControlApi.BusinessCard) {
+  if (
+    item.workflowStatus === 'APPROVED_ATTESTED' &&
+    item.status === 'APPROVED'
+  ) {
+    return '审批已安全确认，等待 Temporal / Agent 执行';
+  }
+  if (item.workflowStatus === 'START_UNCERTAIN') {
+    return 'BPM 发起结果不确定，自动重试已禁用；请先对账后再处理';
+  }
+  if (item.activeAssigneeUserIds) {
+    return `审批流程进行中，当前等待会签人 ${activeAssigneeNames(item.activeAssigneeUserIds)} 办理`;
+  }
   if (item.processInstanceId || item.workflowStatus === 'RUNNING') {
-    return `已进入工作流程，等待审批员 ${item.approverUserId ?? ''} 办理`;
+    return `已进入工作流程，等待审批人 ${approvalUserName(item.approverUserId)} 办理`;
   }
   if (item.workflowStatus === 'START_REQUESTED') {
     return '等待治理员指定本次审批人';
@@ -837,7 +949,7 @@ function openApprovalAssignment(item: CloudMoldAgentControlApi.BusinessCard) {
 async function confirmApprovalAssignment() {
   const item = selectedApprovalCard.value;
   if (!item || !approvalAssigneeUserId.value) {
-    message.warning('请输入审批员用户 ID');
+    message.warning('请选择审批人');
     return;
   }
   if (!item.scopeHash) {
@@ -880,17 +992,24 @@ async function loadApprovalCards() {
   }
   cardsLoading.value = true;
   try {
-    cards.value = await getCloudMoldAgentBusinessCards({
-      cardType: cardType.value,
-      limit: 6,
-      roleCode: roleCode.value,
-      status: 'PENDING',
-    });
+    const [pendingCards, stats] = await Promise.all([
+      getCloudMoldAgentBusinessCards({
+        cardType: cardType.value,
+        limit: 100,
+        roleCode: roleCode.value,
+        status: 'PENDING',
+      }),
+      getCloudMoldAgentApprovalBoardStats(),
+    ]);
+    cards.value = pendingCards;
+    approvalBoardStats.value = stats;
+    await loadApprovalUserNames(cards.value);
     cardsLoadFailed.value = false;
     cardsUnavailable.value = false;
     cardsUnauthorized.value = false;
   } catch (error) {
     cards.value = [];
+    approvalBoardStats.value = undefined;
     cardsUnauthorized.value = isAgentControlForbidden(error);
     cardsUnavailable.value =
       isAgentControlUnavailable(error) || isEndpointUnavailable(error);
@@ -902,6 +1021,9 @@ async function loadApprovalCards() {
 }
 
 watch(activeTab, (tab) => {
+  if (tab === 'role-capabilities') {
+    loadRoleCapabilities();
+  }
   if (tab === 'managed-workflows') {
     managedWorkflowGridApi.query();
   }
@@ -913,6 +1035,9 @@ watch(activeTab, (tab) => {
 function refreshManagedWorkflowsOnFocus() {
   if (activeTab.value === 'managed-workflows') {
     managedWorkflowGridApi.query();
+  }
+  if (activeTab.value === 'role-capabilities') {
+    loadRoleCapabilities();
   }
 }
 
@@ -1210,6 +1335,185 @@ onMounted(() => {
         </div>
       </Tabs.TabPane>
 
+      <Tabs.TabPane key="role-capabilities" tab="岗位能力地图">
+        <div class="flex min-h-0 flex-col gap-4">
+          <Alert
+            type="info"
+            show-icon
+            message="把工作流还原为日常经营岗位"
+            description="每张卡片对应一个主要经营岗位，展示它能编排的日常职责、可回读的内部权威产物，以及必须由外部系统或人工确认的事实门禁。“已登记”只表示托管定义存在，不等于已审批、已首跑或已形成业务结果。"
+          />
+          <Alert
+            v-if="roleCapabilityFlags.unavailable"
+            type="warning"
+            show-icon
+            message="岗位能力地图暂时无法读取托管注册表"
+            description="请在托管工作流接口恢复后刷新；页面不会以静态文案替代真实登记状态。"
+          />
+          <Alert
+            v-else-if="roleCapabilityFlags.loadFailed"
+            type="error"
+            show-icon
+            message="岗位能力地图加载失败"
+            description="请检查 AI 运营查询权限和后端服务后重试。"
+          />
+          <Alert
+            v-if="roleAutomationEvidenceUnavailable"
+            type="warning"
+            show-icon
+            message="岗位定义已读取，自动化实证暂不可读取"
+            description="当前仍会展示登记与事实门禁；调度、候选源和自治实证不会被猜测为成功。"
+          />
+          <Row v-if="!roleCapabilityFlags.unavailable" :gutter="[16, 16]">
+            <Col :xs="24" :sm="8">
+              <Card :loading="roleCapabilityLoading" size="small">
+                <Statistic
+                  title="已托管经营岗位"
+                  :value="registeredRoleCount()"
+                  :suffix="`/ ${roleCapabilityEntries.length || 40}`"
+                />
+              </Card>
+            </Col>
+            <Col :xs="24" :sm="8">
+              <Card :loading="roleCapabilityLoading" size="small">
+                <Statistic
+                  title="已映射托管工作流"
+                  :value="registeredWorkflowCount()"
+                  suffix="条"
+                />
+              </Card>
+            </Col>
+            <Col :xs="24" :sm="8">
+              <Card :loading="roleCapabilityLoading" size="small">
+                <Statistic
+                  title="待建设横向岗位"
+                  :value="foundationRoleCount()"
+                  suffix="个"
+                />
+              </Card>
+            </Col>
+          </Row>
+          <Empty
+            v-if="
+              !roleCapabilityLoading &&
+              !roleCapabilityEntries.length &&
+              !roleCapabilityFlags.loadFailed &&
+              !roleCapabilityFlags.unavailable
+            "
+            description="尚未返回托管工作流注册表"
+          />
+          <Row v-else :gutter="[16, 16]">
+            <Col
+              v-for="entry in roleCapabilityEntries"
+              :key="entry.ownerRole"
+              :xs="24"
+              :lg="12"
+              :xl="8"
+            >
+              <Card class="h-full" size="small">
+                <Space direction="vertical" class="w-full" :size="8">
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <Typography.Text strong>
+                        {{ managedWorkflowOwnerRoleLabel(entry.ownerRole) }}
+                      </Typography.Text>
+                      <div class="mt-1 text-xs text-muted-foreground">
+                        {{ entry.domain }}
+                      </div>
+                    </div>
+                    <StatusTag
+                      v-bind="
+                        entry.capabilityStage === 'FOUNDATION_REQUIRED'
+                          ? {
+                              color: 'default',
+                              label: '待建设：缺少权威数据源',
+                            }
+                          : entry.workflowCount > 0
+                            ? {
+                                color: 'success',
+                                label: `已登记 ${entry.workflowCount} 条`,
+                              }
+                            : { color: 'warning', label: '待补齐定义' }
+                      "
+                    />
+                  </div>
+                  <Typography.Paragraph class="mb-0" :ellipsis="{ rows: 2 }">
+                    <Typography.Text strong>日常职责：</Typography.Text>
+                    {{ entry.dailyDuty }}
+                  </Typography.Paragraph>
+                  <Typography.Paragraph class="mb-0" :ellipsis="{ rows: 2 }">
+                    <Typography.Text strong>可验证产物：</Typography.Text>
+                    {{ entry.verifiableOutcome }}
+                  </Typography.Paragraph>
+                  <Typography.Paragraph class="mb-0" :ellipsis="{ rows: 2 }">
+                    <Typography.Text strong>外部事实门禁：</Typography.Text>
+                    {{ entry.externalFactGate }}
+                  </Typography.Paragraph>
+                  <template v-if="entry.foundationRequirements">
+                    <Typography.Paragraph class="mb-0" :ellipsis="{ rows: 2 }">
+                      <Typography.Text strong>需接通：</Typography.Text>
+                      {{
+                        entry.foundationRequirements.authoritySources.join('、')
+                      }}
+                    </Typography.Paragraph>
+                    <Typography.Paragraph class="mb-0" :ellipsis="{ rows: 2 }">
+                      <Typography.Text strong>受控产物：</Typography.Text>
+                      {{ entry.foundationRequirements.controlledArtifact }}
+                    </Typography.Paragraph>
+                    <Typography.Text type="secondary" class="text-xs">
+                      {{ entry.foundationRequirements.approvalBoundary }}
+                    </Typography.Text>
+                  </template>
+                  <template v-if="entry.automation.length">
+                    <Space wrap>
+                      <StatusTag
+                        v-bind="
+                          temporalScheduleStateSummary(
+                            entry.automation[0]?.scheduleState,
+                          )
+                        "
+                      />
+                      <StatusTag
+                        v-bind="
+                          temporalBusinessAutonomySummary(
+                            entry.automation[0]?.businessAutonomyState,
+                          )
+                        "
+                      />
+                    </Space>
+                    <Typography.Text type="secondary" class="text-xs">
+                      候选 {{ entry.automation[0]?.candidateCount ?? 0 }} 个；
+                      {{
+                        temporalDiscoverySourceSummary(
+                          entry.automation[0]?.discoverySource,
+                        ).label
+                      }}
+                    </Typography.Text>
+                  </template>
+                  <Typography.Text v-else type="secondary" class="text-xs">
+                    {{
+                      entry.capabilityStage === 'FOUNDATION_REQUIRED'
+                        ? '尚未建立候选源、受控写入点和责任人门禁'
+                        : roleAutomationEvidenceUnavailable
+                          ? '自动化实证暂不可读取'
+                          : '尚未形成自动化观测，不计入运行成功'
+                    }}
+                  </Typography.Text>
+                  <Typography.Text
+                    v-if="entry.workflowCount"
+                    type="secondary"
+                    class="block truncate text-xs"
+                    :title="entry.workflowIds.join('、')"
+                  >
+                    {{ entry.workflowIds.join('、') }}
+                  </Typography.Text>
+                </Space>
+              </Card>
+            </Col>
+          </Row>
+        </div>
+      </Tabs.TabPane>
+
       <Tabs.TabPane key="managed-workflows" tab="托管工作流">
         <div class="flex min-h-0 flex-col gap-4">
           <Alert
@@ -1227,6 +1531,11 @@ onMounted(() => {
             description="请检查后端服务与权限后重试。"
           />
           <ManagedWorkflowGrid table-title="托管工作流">
+            <template #managed-workflow-owner-role="{ row }">
+              <span :title="row.ownerRole">
+                {{ managedWorkflowOwnerRoleLabel(row.ownerRole) }}
+              </span>
+            </template>
             <template #managed-workflow-steps="{ row }">
               {{ row.stepCount }} 步（{{ row.writeStepCount }} 个写操作）
             </template>
@@ -1393,9 +1702,60 @@ onMounted(() => {
               指定审批人 → 工作流程待办 → 人工办理 → 安全确认 → 自动恢复 Agent
             </span>
             <span class="text-muted-foreground">
-              “终态待安全确认”表示 BPM 已结束但 Agent 尚未放行。
+              已安全确认的记录会显示为“等待执行”，不会计入审批阻塞。
             </span>
           </div>
+
+          <Row v-if="approvalBoardStats" :gutter="[12, 12]">
+            <Col :xs="12" :md="8" :xl="4">
+              <Card size="small">
+                <Statistic
+                  title="审批阻塞总数"
+                  :value="approvalBoardStats.pendingTotal"
+                />
+              </Card>
+            </Col>
+            <Col :xs="12" :md="8" :xl="4">
+              <Card size="small">
+                <Statistic
+                  title="BPM 审批中"
+                  :value="approvalBoardStats.bpmInProgress"
+                />
+              </Card>
+            </Col>
+            <Col :xs="12" :md="8" :xl="4">
+              <Card size="small">
+                <Statistic
+                  title="待指定审批人"
+                  :value="approvalBoardStats.approverAssignmentRequired"
+                />
+              </Card>
+            </Col>
+            <Col :xs="12" :md="8" :xl="4">
+              <Card size="small">
+                <Statistic
+                  title="启动结果待对账"
+                  :value="approvalBoardStats.startUncertain"
+                />
+              </Card>
+            </Col>
+            <Col :xs="12" :md="8" :xl="4">
+              <Card size="small">
+                <Statistic
+                  title="终态待安全确认"
+                  :value="approvalBoardStats.bpmTerminalPendingSafety"
+                />
+              </Card>
+            </Col>
+            <Col :xs="12" :md="8" :xl="4">
+              <Card size="small">
+                <Statistic
+                  title="已放行待执行"
+                  :value="approvalBoardStats.releasedWaitingExecution"
+                />
+              </Card>
+            </Col>
+          </Row>
 
           <Alert
             v-if="cardsUnavailable"
@@ -1498,12 +1858,13 @@ onMounted(() => {
                         type="link"
                         @click="openApproval(item)"
                       >
-                        去工作流程办理
+                        查看工作流程
                       </Button>
                       <Button
                         v-else-if="
                           item.cardType === 'APPROVAL' &&
                           item.status === 'PENDING' &&
+                          item.workflowStatus === 'START_REQUESTED' &&
                           hasAccessByCodes([
                             'cloudmold:agent-control:govern',
                           ]) &&
@@ -1516,6 +1877,12 @@ onMounted(() => {
                       >
                         指定审批人
                       </Button>
+                      <Typography.Text
+                        v-else-if="item.workflowStatus === 'START_UNCERTAIN'"
+                        type="warning"
+                      >
+                        需对账
+                      </Typography.Text>
                     </Space>
                   </Space>
                 </Card>
@@ -1752,12 +2119,10 @@ onMounted(() => {
         <Typography.Paragraph type="secondary">
           每次审批只授予当前冻结动作；审批员必须与申请人、当前治理员不同。
         </Typography.Paragraph>
-        <InputNumber
+        <UserSelect
           v-model:value="approvalAssigneeUserId"
           class="w-full"
-          :min="1"
-          :precision="0"
-          placeholder="输入审批员用户 ID"
+          placeholder="选择审批人"
         />
       </div>
     </Modal>
@@ -1773,6 +2138,9 @@ onMounted(() => {
         </DescriptionsItem>
         <DescriptionsItem label="用途说明">
           {{ selectedWorkflow.description }}
+        </DescriptionsItem>
+        <DescriptionsItem label="负责岗位">
+          {{ managedWorkflowOwnerRoleLabel(selectedWorkflow.ownerRole) }}
         </DescriptionsItem>
         <DescriptionsItem label="Skill ID">
           <CopyIdCell :value="selectedWorkflow.skillId" label="Skill ID" />
