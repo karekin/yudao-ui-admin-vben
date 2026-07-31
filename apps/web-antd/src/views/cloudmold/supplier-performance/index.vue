@@ -212,7 +212,7 @@ async function loadPerformance() {
             <Progress
               type="circle"
               :percent="Math.round(scorecard.overallBps / 100)"
-              :format="() => formatPercent(scorecard.overallBps)"
+              :format="() => formatPercent(scorecard?.overallBps)"
             />
           </Col>
           <Col :xs="24" :md="18">

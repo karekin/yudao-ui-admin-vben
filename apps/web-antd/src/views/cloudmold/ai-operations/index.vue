@@ -360,13 +360,13 @@ async function operateTemporalSchedule(
   } else {
     await triggerCloudMoldTemporalSchedule(scheduleId);
   }
-  message.success(
-    action === 'trigger'
-      ? '已立即触发'
-      : action === 'pause'
-        ? '已暂停'
-        : '已恢复',
-  );
+  let successMessage = '已恢复';
+  if (action === 'trigger') {
+    successMessage = '已立即触发';
+  } else if (action === 'pause') {
+    successMessage = '已暂停';
+  }
+  message.success(successMessage);
   temporalScheduleGridApi.query();
   temporalAutomationGridApi.query();
 }
@@ -495,6 +495,15 @@ function buildApprovalResponsibility(
     (phase) => phase.approvalRequired || isWaitingStatus(phase.approvalStatus),
   );
   const waiting = isWaitingStatus(detail?.task.status);
+  let approvalStatus = '无需审批';
+  if (approvalPhase) {
+    approvalStatus = getMeta(
+      workflowRunStatusMeta,
+      approvalPhase.approvalStatus,
+    ).label;
+  } else if (waiting) {
+    approvalStatus = '等待中';
+  }
   return [
     {
       label: '风险等级',
@@ -502,11 +511,7 @@ function buildApprovalResponsibility(
     },
     {
       label: '审批状态',
-      value: approvalPhase
-        ? getMeta(workflowRunStatusMeta, approvalPhase.approvalStatus).label
-        : waiting
-          ? '等待中'
-          : '无需审批',
+      value: approvalStatus,
     },
     {
       label: '责任岗位',

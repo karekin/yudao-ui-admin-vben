@@ -2,8 +2,6 @@ import type { RouteRecordRaw } from 'vue-router';
 
 import { mergeRouteModules, traverseTreeValues } from '@vben/utils';
 
-import { BasicLayout } from '#/layouts';
-
 import { coreRoutes, fallbackNotFoundRoute } from './core';
 import cloudmoldOperationsRoutes from './modules/cloudmold-operations';
 
@@ -25,12 +23,7 @@ const dynamicRoutes: RouteRecordRaw[] = mergeRouteModules(dynamicRouteFiles);
 // L3 只读诊断页没有 system_menu 项。若仅作为动态路由，已登录用户首次直接
 // 打开书签会先命中 404；将它们作为独立的主布局根路由注册，数据仍由服务端
 // 查询权限控制，且不会被后端菜单重建流程覆盖或泄露到侧栏。
-const staticRoutes: RouteRecordRaw[] = cloudmoldOperationsRoutes.map(
-  (route) => ({
-    ...route,
-    component: BasicLayout,
-  }),
-);
+const staticRoutes: RouteRecordRaw[] = cloudmoldOperationsRoutes;
 const externalRoutes: RouteRecordRaw[] = [];
 
 /** 路由列表，由基本路由、外部路由和404兜底路由组成

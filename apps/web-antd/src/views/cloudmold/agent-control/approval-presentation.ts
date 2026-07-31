@@ -136,12 +136,10 @@ export function buildGenericApprovalPresentation(
     )
     .slice(0, 6)
     .map(([key, value]) => ({ label: humanizeKey(key), value: String(value) }));
-  const operationCount =
-    commands.length > 0
-      ? commands.length
-      : Array.isArray(context.lifecycle)
-        ? context.lifecycle.length
-        : 0;
+  const lifecycleCount = Array.isArray(context.lifecycle)
+    ? context.lifecycle.length
+    : 0;
+  const operationCount = commands.length > 0 ? commands.length : lifecycleCount;
   const boundary =
     operationNames.length > 0
       ? `将依次执行：${operationNames.slice(0, 6).join('、')}${operationNames.length > 6 ? ' 等' : ''}`

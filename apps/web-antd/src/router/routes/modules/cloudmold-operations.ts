@@ -1,5 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router';
 
+import { BasicLayout } from '#/layouts';
+
 /**
  * CloudMold 横向运营域只读诊断路由（L3）。
  *
@@ -10,6 +12,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/cloudmold/operations',
     name: 'CloudMoldOperationsQuery',
+    component: BasicLayout,
     meta: {
       title: 'CloudMold 运营',
       icon: 'lucide:boxes',

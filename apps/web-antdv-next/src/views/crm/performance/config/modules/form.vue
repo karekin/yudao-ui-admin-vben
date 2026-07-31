@@ -70,8 +70,7 @@ const [Modal, modalApi] = useVbenModal({
       return;
     }
     await formApi.resetForm();
-    const data =
-      modalApi.getData<CrmPerformanceConfigApi.PerformanceConfig>();
+    const data = modalApi.getData<CrmPerformanceConfigApi.PerformanceConfig>();
     if (!data?.id) {
       await formApi.setValues(buildFormValues());
       return;

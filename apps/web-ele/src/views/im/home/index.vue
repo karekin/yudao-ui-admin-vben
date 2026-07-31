@@ -1,6 +1,6 @@
 <script lang="ts">
 // 模块级单例协调前后两个 IM 页面实例
-let activeImShellOwner: null | object = null;
+const imShellState: { activeOwner: null | object } = { activeOwner: null };
 </script>
 
 <script lang="ts" setup>
@@ -35,7 +35,7 @@ import { useImWebSocketStore } from './store/websocketStore';
 defineOptions({ name: 'ImIndex' });
 
 const shellOwner = {}; // 当前 IM 页面壳 owner；旧卸载回调不得停止后来重新挂载的壳
-activeImShellOwner = shellOwner;
+imShellState.activeOwner = shellOwner;
 const route = useRoute();
 const conversationStore = useConversationStore();
 const messageStore = useMessageStore();
@@ -72,7 +72,7 @@ onMounted(async () => {
       .ensureFacePackList()
       .catch((error) => console.warn('[IM] 后台预拉表情包失败', error));
     // 1.3 多个 store 并发从 IDB 读取本地缓存
-    const [, , hasFriendRows, hasGroupRows, hasChannelRows] = await Promise.all([
+    const initResults = await Promise.all([
       conversationStore.loadConversationList(),
       messageStore.loadMessageCursorList(),
       friendStore.loadFriendData(),
@@ -80,6 +80,9 @@ onMounted(async () => {
       channelStore.loadChannelList(),
       groupRequestStore.loadGroupRequestList(),
     ]);
+    const hasFriendRows = initResults[2];
+    const hasGroupRows = initResults[3];
+    const hasChannelRows = initResults[4];
     if (!isInitializationActive()) {
       return;
     }
@@ -204,22 +207,22 @@ onUnmounted(async () => {
   window.removeEventListener('beforeunload', onBeforeUnload);
   await conversationStore.flushConversationDraftSave();
   // 旧壳等待草稿期间可能已有新壳挂载，不能停止新壳复用的物理资源
-  if (activeImShellOwner !== shellOwner) {
+  if (imShellState.activeOwner !== shellOwner) {
     return;
   }
   // 先释放旧壳 owner；后续 await 后若新壳接管，则停止清理共享资源
-  activeImShellOwner = null;
+  imShellState.activeOwner = null;
   webSocketStore.disconnect();
   await clearResourceRequests();
-  if (activeImShellOwner) {
+  if (imShellState.activeOwner) {
     return;
   }
-  await clearMessageSyncState(() => !activeImShellOwner);
-  if (activeImShellOwner) {
+  await clearMessageSyncState(() => !imShellState.activeOwner);
+  if (imShellState.activeOwner) {
     return;
   }
   await closeDb();
-  if (activeImShellOwner) {
+  if (imShellState.activeOwner) {
     return;
   }
   messageStore.clear();
