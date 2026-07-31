@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildApprovalDecisionPresentation,
   buildApprovalPresentation,
   buildGenericApprovalPresentation,
 } from './approval-presentation';
@@ -97,13 +98,41 @@ describe('buildApprovalPresentation', () => {
       operationCount: 2,
       operationNames: ['CREATE_CASE', 'SUBMIT_DECLARATION'],
     });
-    expect(result?.entries).toContainEqual({
-      label: 'run Id',
-      value: 'bonded-customs-001',
-    });
     expect(result?.entries).not.toContainEqual({
       label: 'lease Token',
       value: 'must-not-be-visible',
     });
+    expect(result?.entries).not.toContainEqual({
+      label: 'run Id',
+      value: 'bonded-customs-001',
+    });
+  });
+
+  it('explains a high-risk customs workflow in business terms', () => {
+    expect(
+      buildApprovalDecisionPresentation({
+        actionCode: 'crossborder.bonded-customs',
+        riskLevel: 'R3',
+        roleCode: 'bonded-customs-operations',
+        skillId: 'skill.cloudmold.crossborder.bonded-customs-lifecycle.v1',
+        title: 'Temporal 定时托管',
+      }),
+    ).toMatchObject({
+      title: '保税仓关务处置',
+      objective: expect.stringContaining('关务'),
+      outputs: expect.arrayContaining(['申报或处置记录']),
+      riskReason: expect.stringContaining('合规风险'),
+    });
+  });
+
+  it('keeps the fallback risk explanation actionable', () => {
+    expect(
+      buildApprovalDecisionPresentation({
+        actionCode: 'unmapped.action',
+        riskLevel: 'R3',
+        roleCode: 'operations',
+        title: '未知工作流',
+      })?.riskReason,
+    ).toContain('冻结范围');
   });
 });

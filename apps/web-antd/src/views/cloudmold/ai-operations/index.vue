@@ -55,6 +55,7 @@ import { getSimpleUser } from '#/api/system/user';
 import { router } from '#/router';
 import { UserSelect } from '#/views/system/user/components';
 
+import { buildApprovalDecisionPresentation } from '../agent-control/approval-presentation';
 import CopyIdCell from '../shared/copy-id-cell.vue';
 import EvidenceAlert from '../shared/evidence-alert.vue';
 import StatusTag from '../shared/status-tag.vue';
@@ -935,6 +936,10 @@ function approvalWorkflowSummary(item: CloudMoldAgentControlApi.BusinessCard) {
     return 'BPM 已通过，正在完成安全确认';
   }
   return approvalGateSummary(item.status);
+}
+
+function approvalDecision(item: CloudMoldAgentControlApi.BusinessCard) {
+  return buildApprovalDecisionPresentation(item);
 }
 
 function openApproval(item: CloudMoldAgentControlApi.BusinessCard) {
@@ -1830,11 +1835,39 @@ onMounted(() => {
                       <StatusTag
                         v-bind="getMeta(approvalStatusMeta, item.status)"
                       />
-                      <Typography.Text strong>{{ item.title }}</Typography.Text>
+                      <Typography.Text strong>
+                        {{ approvalDecision(item)?.title || item.title }}
+                      </Typography.Text>
                     </Space>
                     <Typography.Text type="secondary">
                       {{ approvalWorkflowSummary(item) }}
                     </Typography.Text>
+                    <template
+                      v-if="
+                        item.cardType === 'APPROVAL' && approvalDecision(item)
+                      "
+                    >
+                      <div class="rounded bg-muted/50 px-3 py-2 text-sm">
+                        <div class="font-medium text-foreground">
+                          要完成什么
+                        </div>
+                        <div class="text-muted-foreground">
+                          {{ approvalDecision(item)?.objective }}
+                        </div>
+                        <div class="mt-2 font-medium text-foreground">
+                          审批后产出
+                        </div>
+                        <div class="text-muted-foreground">
+                          {{ approvalDecision(item)?.outputs.join('、') }}
+                        </div>
+                        <div class="mt-2 font-medium text-foreground">
+                          高风险原因
+                        </div>
+                        <div class="text-muted-foreground">
+                          {{ approvalDecision(item)?.riskReason }}
+                        </div>
+                      </div>
+                    </template>
                     <Typography.Paragraph
                       class="mb-0"
                       :ellipsis="{ rows: 3, expandable: true }"
@@ -1863,7 +1896,7 @@ onMounted(() => {
                         type="link"
                         @click="openApproval(item)"
                       >
-                        查看工作流程
+                        审阅业务影响与流程
                       </Button>
                       <Button
                         v-else-if="

@@ -17,6 +17,7 @@ import { getCloudMoldAgentApprovalDetail } from '#/api/cloudmold/agent-control';
 import { getSimpleUser } from '#/api/system/user';
 
 import {
+  buildApprovalDecisionPresentation,
   buildApprovalPresentation,
   buildGenericApprovalPresentation,
 } from './approval-presentation';
@@ -34,6 +35,9 @@ const genericPresentation = computed(() =>
   presentation.value
     ? undefined
     : buildGenericApprovalPresentation(approval.value),
+);
+const decisionPresentation = computed(() =>
+  buildApprovalDecisionPresentation(approval.value),
 );
 const roleLabel = computed(() =>
   approval.value?.roleCode === 'merchandising'
@@ -137,6 +141,32 @@ watch(() => props.id, loadApproval, { immediate: true });
     />
 
     <template v-else-if="approval">
+      <template v-if="decisionPresentation">
+        <Alert
+          class="mb-4"
+          type="warning"
+          show-icon
+          message="审批前请确认：业务目标、预期产出与风险依据"
+          description="审批只放行下方已冻结的业务范围；不放行未展示的对象、金额或后续动作。"
+        />
+        <Descriptions :column="1" bordered size="small" class="mb-4">
+          <DescriptionsItem label="本次要完成什么">
+            {{ decisionPresentation.objective }}
+          </DescriptionsItem>
+          <DescriptionsItem label="审批后将留下什么">
+            <Tag
+              v-for="output in decisionPresentation.outputs"
+              :key="output"
+              color="blue"
+            >
+              {{ output }}
+            </Tag>
+          </DescriptionsItem>
+          <DescriptionsItem label="为什么需要高风险审批">
+            {{ decisionPresentation.riskReason }}
+          </DescriptionsItem>
+        </Descriptions>
+      </template>
       <Alert
         v-if="presentation"
         class="mb-4"
