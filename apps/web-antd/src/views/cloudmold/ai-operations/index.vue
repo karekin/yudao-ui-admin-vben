@@ -266,7 +266,6 @@ const managedWorkflowNames = ref<Record<string, string>>({});
 const roleCapabilityEntries = ref<RoleCapabilityEntry[]>([]);
 const jobCapabilityCatalog =
   ref<CloudMoldAiOperationsApi.BusinessSkillCatalog>();
-const selectedBusinessUnitCode = ref('');
 const roleCapabilityLoading = ref(false);
 const roleAutomationEvidenceUnavailable = ref(false);
 const roleCapabilityFlags = ref<SectionFlags>({
@@ -279,11 +278,13 @@ const roleCapabilityBusinessUnits = computed<RoleCapabilityBusinessUnit[]>(() =>
     jobCapabilityCatalog.value,
   ),
 );
-const selectedRoleCapabilityBusinessUnit = computed(
+const currentTenantRoleCapabilityBusinessUnit = computed(
   () =>
+    roleCapabilityBusinessUnits.value.find((unit) => unit.code === 'dewu') ??
     roleCapabilityBusinessUnits.value.find(
-      (unit) => unit.code === selectedBusinessUnitCode.value,
-    ) ?? roleCapabilityBusinessUnits.value[0],
+      (unit) => unit.status === 'ACTIVE' && unit.skillCount > 0,
+    ) ??
+    roleCapabilityBusinessUnits.value[0],
 );
 const foundationRoleCapabilityEntries = computed(() =>
   roleCapabilityEntries.value.filter(
@@ -380,17 +381,6 @@ async function loadRoleCapabilities() {
     managedWorkflowNames.value = Object.fromEntries(
       workflows.map((item) => [item.skillId, item.displayName]),
     );
-    const selectedUnitStillExists = catalog.business_units.some(
-      (unit) => unit.code === selectedBusinessUnitCode.value,
-    );
-    if (!selectedUnitStillExists) {
-      selectedBusinessUnitCode.value =
-        catalog.business_units.find(
-          (unit) => unit.status === 'ACTIVE' && unit.skill_count > 0,
-        )?.code ??
-        catalog.business_units[0]?.code ??
-        '';
-    }
   } catch (error) {
     roleCapabilityEntries.value = [];
     jobCapabilityCatalog.value = undefined;
@@ -1771,30 +1761,7 @@ onMounted(() => {
             "
             description="尚未返回托管工作流注册表"
           />
-          <template v-else-if="roleCapabilityBusinessUnits.length">
-            <Card size="small" class="role-capability-unit-selector">
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <Typography.Text strong>业务板块</Typography.Text>
-                  <div class="mt-1 text-xs text-muted-foreground">
-                    每个业务单元独立维护领域、岗位和运行 Skill。
-                  </div>
-                </div>
-                <Select
-                  v-model:value="selectedBusinessUnitCode"
-                  class="w-64"
-                  :options="
-                    roleCapabilityBusinessUnits.map((unit) => ({
-                      label: `${unit.name} · ${unit.skillCount} 个 Skill${
-                        unit.status === 'PLANNED' ? '（待接入）' : ''
-                      }`,
-                      value: unit.code,
-                    }))
-                  "
-                />
-              </div>
-            </Card>
-
+          <template v-else-if="currentTenantRoleCapabilityBusinessUnit">
             <Alert
               v-if="jobCapabilityCatalog?.missing_skill_names.length"
               type="warning"
@@ -1804,17 +1771,17 @@ onMounted(() => {
             />
 
             <Empty
-              v-if="!selectedRoleCapabilityBusinessUnit?.domains.length"
+              v-if="!currentTenantRoleCapabilityBusinessUnit.domains.length"
               :description="
-                selectedRoleCapabilityBusinessUnit?.status === 'PLANNED'
-                  ? `${selectedRoleCapabilityBusinessUnit.name} 尚未接入岗位 Skill，目录已预留且不会复用其他业务单元的运行定义。`
-                  : '当前业务板块尚未登记可展示的岗位 Skill'
+                currentTenantRoleCapabilityBusinessUnit.status === 'PLANNED'
+                  ? '当前租户尚未接入岗位 Skill。'
+                  : '当前租户尚未登记可展示的岗位 Skill。'
               "
             />
 
             <template v-else>
               <section
-                v-for="domain in selectedRoleCapabilityBusinessUnit?.domains"
+                v-for="domain in currentTenantRoleCapabilityBusinessUnit.domains"
                 :key="domain.code"
                 class="role-capability-domain"
               >
@@ -1828,9 +1795,6 @@ onMounted(() => {
                       {{ domain.skillCount }} 个 Skill
                     </Typography.Text>
                   </div>
-                  <Tag color="blue">
-                    {{ selectedRoleCapabilityBusinessUnit.name }}
-                  </Tag>
                 </div>
 
                 <Row :gutter="[16, 16]">
@@ -1875,7 +1839,7 @@ onMounted(() => {
                           <Typography.Text strong>日常职责：</Typography.Text>
                           {{
                             role.entry?.dailyDuty ??
-                            '提供跨业务板块复用的连接、治理、策略和工程能力。'
+                            '提供连接、治理、策略和工程能力。'
                           }}
                         </Typography.Paragraph>
                         <Typography.Paragraph
@@ -1971,10 +1935,10 @@ onMounted(() => {
               <div class="role-capability-domain-heading">
                 <div>
                   <Typography.Title :level="4" class="mb-0">
-                    跨板块横向岗位（待建设）
+                    待建设横向岗位
                   </Typography.Title>
                   <Typography.Text type="secondary" class="text-xs">
-                    尚未接通权威数据源，不计入任何业务板块的已托管岗位。
+                    尚未接通权威数据源，不计入当前租户的已托管岗位。
                   </Typography.Text>
                 </div>
               </div>
@@ -2817,11 +2781,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.role-capability-unit-selector {
-  background: hsl(var(--card));
-  border-color: hsl(var(--border));
-}
-
 .role-capability-domain {
   padding: 18px;
   background: hsl(var(--muted) / 28%);
