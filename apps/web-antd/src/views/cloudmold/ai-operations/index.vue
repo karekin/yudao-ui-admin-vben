@@ -67,10 +67,8 @@ import { getSimpleUser } from '#/api/system/user';
 import { router } from '#/router';
 import { UserSelect } from '#/views/system/user/components';
 
-import {
-  approvalActionLabel,
-  buildApprovalDecisionPresentation,
-} from '../agent-control/approval-presentation';
+import { approvalActionLabel } from '../agent-control/approval-action-label';
+import { buildApprovalDecisionPresentation } from '../agent-control/approval-presentation';
 import CopyIdCell from '../shared/copy-id-cell.vue';
 import StatusTag from '../shared/status-tag.vue';
 import {
