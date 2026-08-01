@@ -5,6 +5,7 @@ import {
   aiOperationsConsoleNotice,
   approvalGateSummary,
   buildApprovalRoleOptions,
+  buildRoleCapabilityBusinessUnits,
   buildRoleCapabilityMap,
   managedWorkflowOwnerRoleLabel,
   normalizeManagedWorkflowList,
@@ -150,21 +151,158 @@ describe('ai operations presentation helpers', () => {
     ).toBe(true);
   });
 
+  it('groups role cards by business unit then business domain from DeerFlow', () => {
+    const entries = buildRoleCapabilityMap([]);
+    const groups = buildRoleCapabilityBusinessUnits(entries, {
+      assigned_skill_count: 1,
+      enabled_assigned_skill_count: 1,
+      enabled_skill_count: 2,
+      business_units: [
+        {
+          code: 'dewu',
+          domains: [
+            {
+              code: 'merchant-acquisition',
+              name: '招商域',
+              order: 10,
+              roles: [
+                {
+                  code: 'merchant-onboarding-operator',
+                  enabled_skill_count: 1,
+                  name: '商家入驻运营',
+                  order: 10,
+                  skill_count: 1,
+                  skills: [
+                    {
+                      category: 'public',
+                      content_sha256: 'a'.repeat(64),
+                      description: '商家入驻岗位 Skill',
+                      enabled: true,
+                      name: 'cloudmold-merchant-onboarding-lifecycle',
+                    },
+                  ],
+                },
+              ],
+              enabled_skill_count: 1,
+              skill_count: 1,
+            },
+          ],
+          name: '得物',
+          order: 10,
+          enabled_skill_count: 1,
+          skill_count: 1,
+          status: 'ACTIVE',
+        },
+        {
+          code: 'fashion88',
+          domains: [],
+          enabled_skill_count: 0,
+          name: 'Fashion88',
+          order: 20,
+          skill_count: 0,
+          status: 'PLANNED',
+        },
+        {
+          code: 'cloudmold-shared',
+          domains: [
+            {
+              code: 'platform',
+              name: '平台与工程域',
+              order: 90,
+              roles: [
+                {
+                  code: 'shared-platform-capability',
+                  enabled_skill_count: 1,
+                  name: '通用平台能力',
+                  order: 10,
+                  skill_count: 1,
+                  skills: [
+                    {
+                      category: 'public',
+                      content_sha256: 'd'.repeat(64),
+                      description: '平台运行 Skill',
+                      enabled: true,
+                      name: 'cloudmold-dubbo-operator',
+                    },
+                  ],
+                },
+              ],
+              enabled_skill_count: 1,
+              skill_count: 1,
+            },
+          ],
+          name: 'CloudMold 共享平台',
+          order: 90,
+          enabled_skill_count: 1,
+          skill_count: 1,
+          status: 'ACTIVE',
+        },
+      ],
+      catalog_sha256: 'b'.repeat(64),
+      missing_skill_names: [],
+      schema_version: 'cloudmold.skill-business-taxonomy/v1',
+      skill_count: 1,
+      taxonomy_sha256: 'c'.repeat(64),
+    });
+
+    expect(groups).toHaveLength(3);
+    expect(groups[0]).toMatchObject({
+      code: 'dewu',
+      domains: [
+        {
+          code: 'merchant-acquisition',
+          roles: [
+            {
+              roleCode: 'merchant-onboarding-operator',
+              skills: [{ name: 'cloudmold-merchant-onboarding-lifecycle' }],
+            },
+          ],
+        },
+      ],
+      name: '得物',
+    });
+    expect(groups[1]).toMatchObject({
+      code: 'fashion88',
+      domains: [],
+      status: 'PLANNED',
+    });
+    expect(groups[2]).toMatchObject({
+      code: 'cloudmold-shared',
+      domains: [
+        {
+          roles: [
+            {
+              entry: undefined,
+              roleCode: 'shared-platform-capability',
+              skills: [{ name: 'cloudmold-dubbo-operator' }],
+            },
+          ],
+        },
+      ],
+    });
+  });
+
   it('offers every managed role and preserves historical approval roles', () => {
     const options = buildApprovalRoleOptions();
 
-    expect(options).toHaveLength(42);
+    expect(options).toHaveLength(47);
     expect(options).toEqual(
       expect.arrayContaining([
         { label: '风险争议与损失运营', value: 'risk-operations' },
         { label: '仓储运营', value: 'warehouse-operations' },
         { label: '买手', value: 'buyer' },
+        { label: '增长营销运营', value: 'growth-marketing' },
+        { label: '商家运营', value: 'merchant-operations' },
+        { label: '采购运营', value: 'procurement' },
       ]),
     );
     expect(agentControlRoleLabel('supplier-sourcing-operator')).toBe(
       '供应商寻源运营',
     );
     expect(agentControlRoleLabel('inventory-control')).toBe('库控');
+    expect(agentControlRoleLabel('growth-marketing')).toBe('增长营销运营');
+    expect(agentControlRoleLabel('merchant-operations')).toBe('商家运营');
+    expect(agentControlRoleLabel('procurement')).toBe('采购运营');
     expect(options).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ value: 'privacy-security-operator' }),

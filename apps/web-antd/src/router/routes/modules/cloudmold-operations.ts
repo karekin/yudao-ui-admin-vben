@@ -121,6 +121,17 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'ai-workflow-detail',
+        name: 'CloudMoldAiWorkflowDetail',
+        component: () =>
+          import('#/views/cloudmold/ai-operations/workflow-detail.vue'),
+        meta: {
+          title: 'Skill 编排与托管工作流',
+          authority: ['cloudmold:ai-operations:query'],
+          hideInMenu: true,
+        },
+      },
+      {
         path: 'supplier-performance',
         name: 'CloudMoldSupplierPerformance',
         component: () =>

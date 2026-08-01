@@ -283,6 +283,28 @@ export interface RoleCapabilityEntry extends RoleCapabilityProfile {
   workflowIds: string[];
 }
 
+export interface RoleCapabilityBusinessRole {
+  entry?: RoleCapabilityEntry;
+  roleCode: string;
+  roleName: string;
+  skills: CloudMoldAiOperationsApi.BusinessSkillSummary[];
+}
+
+export interface RoleCapabilityBusinessDomain {
+  code: string;
+  name: string;
+  roles: RoleCapabilityBusinessRole[];
+  skillCount: number;
+}
+
+export interface RoleCapabilityBusinessUnit {
+  code: string;
+  domains: RoleCapabilityBusinessDomain[];
+  name: string;
+  skillCount: number;
+  status: string;
+}
+
 export const roleCapabilityProfiles: RoleCapabilityProfile[] = [
   {
     domain: '财务经营',
@@ -630,13 +652,50 @@ export function buildRoleCapabilityMap(
   });
 }
 
+export function buildRoleCapabilityBusinessUnits(
+  entries: RoleCapabilityEntry[],
+  catalog?: CloudMoldAiOperationsApi.BusinessSkillCatalog,
+): RoleCapabilityBusinessUnit[] {
+  if (!catalog) return [];
+  const entriesByRole = new Map(
+    entries
+      .filter((entry) => entry.capabilityStage !== 'FOUNDATION_REQUIRED')
+      .map((entry) => [entry.ownerRole, entry]),
+  );
+
+  return catalog.business_units.map((unit) => ({
+    code: unit.code,
+    name: unit.name,
+    status: unit.status,
+    skillCount: unit.skill_count,
+    domains: unit.domains
+      .map((domain) => ({
+        code: domain.code,
+        name: domain.name,
+        skillCount: domain.skill_count,
+        roles: domain.roles.map((role) => ({
+          entry: entriesByRole.get(role.code),
+          roleCode: role.code,
+          roleName: role.name,
+          skills: role.skills,
+        })),
+      }))
+      .filter((domain) => domain.roles.length > 0),
+  }));
+}
+
 const legacyAgentControlRoleLabels: Record<string, string> = {
   buyer: '买手',
   'customer-service': '客服',
+  'growth-marketing': '增长营销运营',
   'inventory-control': '库控',
   'merchant-acquisition': '招商',
+  'merchant-experience': '商家体验运营',
+  'merchant-operations': '商家运营',
   merchandising: '商品运营',
   planning: '企划',
+  procurement: '采购运营',
+  warehouse: '仓储运营',
 };
 
 export function agentControlRoleLabel(value?: string) {

@@ -1,13 +1,21 @@
 <script lang="ts" setup>
 import type { PageResult } from '@vben/request';
 
-import type { RoleCapabilityEntry } from './data';
+import type { RoleCapabilityBusinessUnit, RoleCapabilityEntry } from './data';
 
 import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CloudMoldAgentControlApi } from '#/api/cloudmold/agent-control';
 import type { CloudMoldAiOperationsApi } from '#/api/cloudmold/ai-operations';
 
-import { onActivated, onDeactivated, onMounted, ref, watch } from 'vue';
+import {
+  computed,
+  onActivated,
+  onDeactivated,
+  onMounted,
+  ref,
+  watch,
+} from 'vue';
+import { useRoute } from 'vue-router';
 
 import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
@@ -25,11 +33,13 @@ import {
   Empty,
   message,
   Modal,
+  Pagination,
   Row,
   Select,
   Space,
   Statistic,
   Tabs,
+  Tag,
   Typography,
 } from 'ant-design-vue';
 
@@ -42,6 +52,8 @@ import {
 } from '#/api/cloudmold/agent-control';
 import { grantApprover } from '#/api/cloudmold/agent-control/command';
 import {
+  getCloudMoldJobCapabilityCatalog,
+  getCloudMoldJobCapabilitySkill,
   getCloudMoldManagedRunDetail,
   getCloudMoldManagedRunPage,
   getCloudMoldManagedWorkflowList,
@@ -55,16 +67,18 @@ import { getSimpleUser } from '#/api/system/user';
 import { router } from '#/router';
 import { UserSelect } from '#/views/system/user/components';
 
-import { buildApprovalDecisionPresentation } from '../agent-control/approval-presentation';
+import {
+  approvalActionLabel,
+  buildApprovalDecisionPresentation,
+} from '../agent-control/approval-presentation';
 import CopyIdCell from '../shared/copy-id-cell.vue';
-import EvidenceAlert from '../shared/evidence-alert.vue';
 import StatusTag from '../shared/status-tag.vue';
 import {
   agentControlRoleLabel,
-  aiOperationsConsoleNotice,
   approvalGateSummary,
   approvalStatusMeta,
   buildApprovalRoleOptions,
+  buildRoleCapabilityBusinessUnits,
   buildRoleCapabilityMap,
   managedWorkflowOwnerRoleLabel,
   normalizeManagedWorkflowList,
@@ -167,7 +181,53 @@ function matchFilter(value: null | string | undefined, keyword: unknown) {
     .includes(String(keyword).trim().toLowerCase());
 }
 
-const activeTab = ref('managed-workflows');
+const aiOperationsTabs = [
+  {
+    key: 'temporal-schedules',
+    title: '自动化健康',
+    description: '先看可触发性与自治证据，再进入工作流处置。',
+    label: '定时任务',
+  },
+  {
+    key: 'role-capabilities',
+    title: '岗位能力地图',
+    description: '从经营岗位出发，判断职责、授权与可验证产物是否齐备。',
+    label: '岗位能力',
+  },
+  {
+    key: 'managed-workflows',
+    title: '托管工作流',
+    description: '以流程定义为中心管理责任岗位、风险等级与审批门禁。',
+    label: '托管工作流',
+  },
+  {
+    key: 'runs',
+    title: '托管运行实例',
+    description: '将异常、待复核与 SLA 风险收敛到同一处置视图。',
+    label: '运行实例',
+  },
+  {
+    key: 'artifacts',
+    title: '业务结果与终态',
+    description: '以业务结果而非运行次数判断 Agent 是否完成经营闭环。',
+    label: '运行产物',
+  },
+  {
+    key: 'observations-approval',
+    title: '审批工作台',
+    description: '先处理会阻塞业务的高风险门禁，再查看运行与安全确认。',
+    label: '观测与审批',
+  },
+] as const;
+type AiOperationsTab = (typeof aiOperationsTabs)[number]['key'];
+
+const route = useRoute();
+const activeTab = ref<AiOperationsTab>('managed-workflows');
+const activeTabPresentation = computed(
+  () =>
+    aiOperationsTabs.find((item) => item.key === activeTab.value) ??
+    aiOperationsTabs[2],
+);
 const { hasAccessByCodes } = useAccess();
 const userStore = useUserStore();
 
@@ -199,16 +259,45 @@ const temporalAutomationLoading = ref(false);
 const temporalAutomationOverview =
   ref<CloudMoldAiOperationsApi.TemporalAutomationOverview>();
 
-const workflowDetailOpen = ref(false);
-const selectedWorkflow = ref<CloudMoldAiOperationsApi.ManagedWorkflow>();
+const temporalBlockWorkspace = ref<null | {
+  approvalId?: string;
+  temporalRunId?: string;
+  temporalWorkflowId?: string;
+}>(null);
 const managedWorkflowNames = ref<Record<string, string>>({});
 const roleCapabilityEntries = ref<RoleCapabilityEntry[]>([]);
+const jobCapabilityCatalog =
+  ref<CloudMoldAiOperationsApi.BusinessSkillCatalog>();
+const selectedBusinessUnitCode = ref('');
 const roleCapabilityLoading = ref(false);
 const roleAutomationEvidenceUnavailable = ref(false);
 const roleCapabilityFlags = ref<SectionFlags>({
   loadFailed: false,
   unavailable: false,
 });
+const roleCapabilityBusinessUnits = computed<RoleCapabilityBusinessUnit[]>(() =>
+  buildRoleCapabilityBusinessUnits(
+    roleCapabilityEntries.value,
+    jobCapabilityCatalog.value,
+  ),
+);
+const selectedRoleCapabilityBusinessUnit = computed(
+  () =>
+    roleCapabilityBusinessUnits.value.find(
+      (unit) => unit.code === selectedBusinessUnitCode.value,
+    ) ?? roleCapabilityBusinessUnits.value[0],
+);
+const foundationRoleCapabilityEntries = computed(() =>
+  roleCapabilityEntries.value.filter(
+    (entry) => entry.capabilityStage === 'FOUNDATION_REQUIRED',
+  ),
+);
+const skillContentOpen = ref(false);
+const skillContentLoading = ref(false);
+const selectedSkillContent =
+  ref<CloudMoldAiOperationsApi.BusinessSkillContent>();
+const selectedSkillName = ref('');
+let skillContentRequestSequence = 0;
 
 function workflowName(skillId?: string) {
   if (!skillId) return '未识别工作流';
@@ -218,8 +307,10 @@ function workflowName(skillId?: string) {
 function openWorkflowDetail(
   workflow: CloudMoldAiOperationsApi.ManagedWorkflow,
 ) {
-  selectedWorkflow.value = workflow;
-  workflowDetailOpen.value = true;
+  void router.push({
+    name: 'CloudMoldAiWorkflowDetail',
+    query: { skillId: workflow.skillId },
+  });
 }
 
 function registeredRoleCount() {
@@ -240,13 +331,41 @@ function registeredWorkflowCount() {
   );
 }
 
+async function openSkillContent(skillName: string) {
+  const requestSequence = ++skillContentRequestSequence;
+  selectedSkillName.value = skillName;
+  selectedSkillContent.value = undefined;
+  skillContentOpen.value = true;
+  skillContentLoading.value = true;
+  try {
+    const content = await getCloudMoldJobCapabilitySkill(skillName);
+    if (
+      requestSequence === skillContentRequestSequence &&
+      selectedSkillName.value === skillName
+    ) {
+      selectedSkillContent.value = content;
+    }
+  } catch {
+    if (requestSequence === skillContentRequestSequence) {
+      message.error('岗位 Skill 内容读取失败，请检查 DeerFlow 连接和查询权限');
+    }
+  } finally {
+    if (requestSequence === skillContentRequestSequence) {
+      skillContentLoading.value = false;
+    }
+  }
+}
+
 async function loadRoleCapabilities() {
   resetFlags(roleCapabilityFlags.value);
   roleCapabilityLoading.value = true;
   try {
-    const workflows = normalizeManagedWorkflowList(
-      await getCloudMoldManagedWorkflowList(),
-    );
+    const [workflowPayload, catalog] = await Promise.all([
+      getCloudMoldManagedWorkflowList(),
+      getCloudMoldJobCapabilityCatalog(),
+    ]);
+    const workflows = normalizeManagedWorkflowList(workflowPayload);
+    jobCapabilityCatalog.value = catalog;
     roleAutomationEvidenceUnavailable.value = false;
     let automationWorkflows: CloudMoldAiOperationsApi.TemporalAutomationWorkflow[] =
       [];
@@ -263,8 +382,20 @@ async function loadRoleCapabilities() {
     managedWorkflowNames.value = Object.fromEntries(
       workflows.map((item) => [item.skillId, item.displayName]),
     );
+    const selectedUnitStillExists = catalog.business_units.some(
+      (unit) => unit.code === selectedBusinessUnitCode.value,
+    );
+    if (!selectedUnitStillExists) {
+      selectedBusinessUnitCode.value =
+        catalog.business_units.find(
+          (unit) => unit.status === 'ACTIVE' && unit.skill_count > 0,
+        )?.code ??
+        catalog.business_units[0]?.code ??
+        '';
+    }
   } catch (error) {
     roleCapabilityEntries.value = [];
+    jobCapabilityCatalog.value = undefined;
     roleAutomationEvidenceUnavailable.value = false;
     applyFailure(roleCapabilityFlags.value, error);
   } finally {
@@ -722,7 +853,7 @@ const [ManagedWorkflowGrid, managedWorkflowGridApi] = useVbenVxeGrid({
   } as VxeTableGridOptions<CloudMoldAiOperationsApi.ManagedWorkflow>,
 });
 
-const [ManagedRunGrid] = useVbenVxeGrid({
+const [ManagedRunGrid, managedRunGridApi] = useVbenVxeGrid({
   formOptions: {
     collapsed: true,
     collapsedRows: 1,
@@ -754,7 +885,7 @@ const [ManagedRunGrid] = useVbenVxeGrid({
   } as VxeTableGridOptions<CloudMoldAiOperationsApi.ManagedRun>,
 });
 
-const [ManagedArtifactGrid] = useVbenVxeGrid({
+const [ManagedArtifactGrid, managedArtifactGridApi] = useVbenVxeGrid({
   formOptions: {
     collapsed: true,
     collapsedRows: 1,
@@ -786,7 +917,7 @@ const [ManagedArtifactGrid] = useVbenVxeGrid({
   } as VxeTableGridOptions<CloudMoldAiOperationsApi.ManagedRun>,
 });
 
-const [ManagedObservationGrid] = useVbenVxeGrid({
+const [ManagedObservationGrid, managedObservationGridApi] = useVbenVxeGrid({
   formOptions: {
     collapsed: true,
     collapsedRows: 1,
@@ -827,6 +958,9 @@ const cardsUnavailable = ref(false);
 const cardsUnauthorized = ref(false);
 const roleCode = ref<string>();
 const cardType = ref<CloudMoldAgentControlApi.CardType>('APPROVAL');
+const approvalPage = ref(1);
+const approvalPageSize = 4;
+const expandedApprovalGroupKeys = ref<string[]>([]);
 const approvalAssignOpen = ref(false);
 const approvalAssigning = ref(false);
 const approvalAssigneeUserId = ref<number>();
@@ -834,6 +968,45 @@ const selectedApprovalCard = ref<CloudMoldAgentControlApi.BusinessCard>();
 const approvalUserNames = ref<Record<number, string>>({});
 
 const roleOptions = buildApprovalRoleOptions();
+
+const approvalCardGroups = computed(() => {
+  const grouped = new Map<
+    string,
+    {
+      actionLabel: string;
+      items: CloudMoldAgentControlApi.BusinessCard[];
+      key: string;
+      roleLabel: string;
+      title: string;
+    }
+  >();
+
+  cards.value.forEach((item) => {
+    const title = approvalCardTitle(item);
+    const roleLabel = roleName(item.roleCode);
+    const actionLabel = approvalActionLabel(item.actionCode);
+    const key = [item.roleCode ?? '', title, actionLabel].join('::');
+    const group = grouped.get(key);
+    if (group) {
+      group.items.push(item);
+      return;
+    }
+    grouped.set(key, {
+      actionLabel,
+      items: [item],
+      key,
+      roleLabel,
+      title,
+    });
+  });
+
+  return [...grouped.values()];
+});
+
+const pagedApprovalCardGroups = computed(() => {
+  const start = (approvalPage.value - 1) * approvalPageSize;
+  return approvalCardGroups.value.slice(start, start + approvalPageSize);
+});
 
 const typeOptions = [
   { label: '待审批', value: 'APPROVAL' },
@@ -938,8 +1111,65 @@ function approvalWorkflowSummary(item: CloudMoldAgentControlApi.BusinessCard) {
   return approvalGateSummary(item.status);
 }
 
+function approvalSkillId(item: CloudMoldAgentControlApi.BusinessCard) {
+  return item.title.match(/skill\.cloudmold\.[\w.-]+/i)?.[0];
+}
+
 function approvalDecision(item: CloudMoldAgentControlApi.BusinessCard) {
-  return buildApprovalDecisionPresentation(item);
+  return buildApprovalDecisionPresentation({
+    ...item,
+    skillId: approvalSkillId(item),
+  });
+}
+
+function approvalCardTitle(item: CloudMoldAgentControlApi.BusinessCard) {
+  const decision = approvalDecision(item);
+  if (approvalSkillId(item) && decision && decision.title !== item.title) {
+    return decision.title;
+  }
+  const scheduledTitleByRole: Record<string, string> = {
+    'growth-marketing': '增长活动与投放调整',
+    logistics: '物流履约异常处置',
+    'merchant-experience': '商家体验问题处置',
+    'merchant-operations': '商家经营巡检与处置',
+    procurement: '采购计划与订单处置',
+    quality: '质量风险与处置',
+    warehouse: '仓储作业与库存处置',
+  };
+  if (item.title.startsWith('Temporal 定时托管')) {
+    return (
+      scheduledTitleByRole[item.roleCode ?? ''] ??
+      `${roleName(item.roleCode)}例行任务审批`
+    );
+  }
+  return decision?.title || item.title;
+}
+
+function approvalGroupDescription(
+  items: CloudMoldAgentControlApi.BusinessCard[],
+) {
+  const firstItem = items[0];
+  if (!firstItem) return '审批数据暂不可用';
+  if (items.length === 1) return approvalWorkflowSummary(firstItem);
+  return `已合并 ${items.length} 条同类审批，最近一条 ${formatTime(firstItem.occurredAt)}；展开后可逐条查看。`;
+}
+
+function firstApprovalCard(items: CloudMoldAgentControlApi.BusinessCard[]) {
+  const firstItem = items[0];
+  if (!firstItem) {
+    throw new Error('Approval group must contain at least one card');
+  }
+  return firstItem;
+}
+
+function isApprovalGroupExpanded(key: string) {
+  return expandedApprovalGroupKeys.value.includes(key);
+}
+
+function toggleApprovalGroup(key: string) {
+  expandedApprovalGroupKeys.value = isApprovalGroupExpanded(key)
+    ? expandedApprovalGroupKeys.value.filter((item) => item !== key)
+    : [...expandedApprovalGroupKeys.value, key];
 }
 
 function scrollToManagedObservation() {
@@ -1007,6 +1237,7 @@ async function loadApprovalCards() {
     return;
   }
   cardsLoading.value = true;
+  approvalPage.value = 1;
   try {
     const [pendingCards, stats] = await Promise.all([
       getCloudMoldAgentBusinessCards({
@@ -1048,6 +1279,108 @@ watch(activeTab, (tab) => {
   }
 });
 
+async function applyWorkspaceLink() {
+  const tab = route.query.tab;
+  const requestedTab =
+    typeof tab === 'string' && aiOperationsTabs.some((item) => item.key === tab)
+      ? (tab as AiOperationsTab)
+      : undefined;
+  if (requestedTab) {
+    activeTab.value = requestedTab;
+  }
+
+  const skillId =
+    typeof route.query.skillId === 'string' ? route.query.skillId.trim() : '';
+  const taskId =
+    typeof route.query.taskId === 'string' ? route.query.taskId.trim() : '';
+  const temporalWorkflowId =
+    typeof route.query.temporalWorkflowId === 'string'
+      ? route.query.temporalWorkflowId.trim()
+      : '';
+  const temporalRunId =
+    typeof route.query.temporalRunId === 'string'
+      ? route.query.temporalRunId.trim()
+      : '';
+  const approvalId =
+    typeof route.query.approvalId === 'string'
+      ? route.query.approvalId.trim()
+      : '';
+  const detail = route.query.detail;
+
+  if (requestedTab === 'runs') {
+    temporalBlockWorkspace.value =
+      detail === 'temporal-block'
+        ? { approvalId, temporalRunId, temporalWorkflowId }
+        : null;
+    await managedRunGridApi.formApi.setValues({ skillId, taskId });
+    await managedRunGridApi.query();
+    if (detail === 'run' && taskId) {
+      await openRunDetail(taskId, 'managed', workflowName(skillId));
+    }
+  }
+  if (requestedTab === 'managed-workflows' && skillId) {
+    await managedWorkflowGridApi.formApi.setValues({ skillId });
+    await managedWorkflowGridApi.query();
+    if (detail === 'workflow') {
+      await router.replace({
+        name: 'CloudMoldAiWorkflowDetail',
+        query: { skillId },
+      });
+    }
+  }
+}
+
+watch(
+  () => [
+    route.query.approvalId,
+    route.query.detail,
+    route.query.skillId,
+    route.query.tab,
+    route.query.taskId,
+    route.query.temporalRunId,
+    route.query.temporalWorkflowId,
+  ],
+  () => {
+    void applyWorkspaceLink();
+  },
+  { immediate: true },
+);
+
+async function refreshActiveWorkspace() {
+  switch (activeTab.value) {
+    case 'artifacts': {
+      await managedArtifactGridApi.query();
+      break;
+    }
+    case 'managed-workflows': {
+      await managedWorkflowGridApi.query();
+      break;
+    }
+    case 'observations-approval': {
+      await Promise.all([
+        loadApprovalCards(),
+        managedObservationGridApi.query(),
+      ]);
+      break;
+    }
+    case 'role-capabilities': {
+      await loadRoleCapabilities();
+      break;
+    }
+    case 'runs': {
+      await managedRunGridApi.query();
+      break;
+    }
+    case 'temporal-schedules': {
+      await Promise.all([
+        temporalAutomationGridApi.query(),
+        temporalScheduleGridApi.query(),
+      ]);
+      break;
+    }
+  }
+}
+
 function refreshManagedWorkflowsOnFocus() {
   if (activeTab.value === 'managed-workflows') {
     managedWorkflowGridApi.query();
@@ -1074,11 +1407,33 @@ onMounted(() => {
 </script>
 
 <template>
-  <Page auto-content-height content-class="flex min-h-0 flex-col">
-    <EvidenceAlert
-      message="AI 运营控制台"
-      :description="aiOperationsConsoleNotice"
-    />
+  <Page
+    auto-content-height
+    class="ai-operations-page"
+    content-class="flex min-h-0 flex-col"
+  >
+    <section class="ai-operations-command-bar">
+      <div class="ai-operations-command-copy">
+        <span>AI 运营 / {{ activeTabPresentation.label }}</span>
+        <h1>{{ activeTabPresentation.title }}</h1>
+        <p>{{ activeTabPresentation.description }}</p>
+      </div>
+      <Button class="ai-operations-refresh" @click="refreshActiveWorkspace">
+        刷新数据
+      </Button>
+      <nav class="ai-operations-tab-strip" aria-label="AI 运营模块导航">
+        <button
+          v-for="item in aiOperationsTabs"
+          :key="item.key"
+          :aria-current="item.key === activeTab ? 'page' : undefined"
+          :class="{ 'is-active': item.key === activeTab }"
+          type="button"
+          @click="activeTab = item.key"
+        >
+          {{ item.label }}
+        </button>
+      </nav>
+    </section>
 
     <Tabs
       v-model:active-key="activeTab"
@@ -1418,115 +1773,250 @@ onMounted(() => {
             "
             description="尚未返回托管工作流注册表"
           />
-          <Row v-else :gutter="[16, 16]">
-            <Col
-              v-for="entry in roleCapabilityEntries"
-              :key="entry.ownerRole"
-              :xs="24"
-              :lg="12"
-              :xl="8"
-            >
-              <Card class="h-full" size="small">
-                <Space direction="vertical" class="w-full" :size="8">
-                  <div class="flex items-start justify-between gap-3">
-                    <div>
-                      <Typography.Text strong>
-                        {{ managedWorkflowOwnerRoleLabel(entry.ownerRole) }}
-                      </Typography.Text>
-                      <div class="mt-1 text-xs text-muted-foreground">
-                        {{ entry.domain }}
-                      </div>
-                    </div>
-                    <StatusTag
-                      v-bind="
-                        entry.capabilityStage === 'FOUNDATION_REQUIRED'
-                          ? {
-                              color: 'default',
-                              label: '待建设：缺少权威数据源',
-                            }
-                          : entry.workflowCount > 0
-                            ? {
-                                color: 'success',
-                                label: `已登记 ${entry.workflowCount} 条`,
-                              }
-                            : { color: 'warning', label: '待补齐定义' }
-                      "
-                    />
+          <template v-else-if="roleCapabilityBusinessUnits.length">
+            <Card size="small" class="role-capability-unit-selector">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <Typography.Text strong>业务板块</Typography.Text>
+                  <div class="mt-1 text-xs text-muted-foreground">
+                    每个业务单元独立维护领域、岗位和运行 Skill。
                   </div>
-                  <Typography.Paragraph class="mb-0" :ellipsis="{ rows: 2 }">
-                    <Typography.Text strong>日常职责：</Typography.Text>
-                    {{ entry.dailyDuty }}
-                  </Typography.Paragraph>
-                  <Typography.Paragraph class="mb-0" :ellipsis="{ rows: 2 }">
-                    <Typography.Text strong>可验证产物：</Typography.Text>
-                    {{ entry.verifiableOutcome }}
-                  </Typography.Paragraph>
-                  <Typography.Paragraph class="mb-0" :ellipsis="{ rows: 2 }">
-                    <Typography.Text strong>外部事实门禁：</Typography.Text>
-                    {{ entry.externalFactGate }}
-                  </Typography.Paragraph>
-                  <template v-if="entry.foundationRequirements">
-                    <Typography.Paragraph class="mb-0" :ellipsis="{ rows: 2 }">
-                      <Typography.Text strong>需接通：</Typography.Text>
-                      {{
-                        entry.foundationRequirements.authoritySources.join('、')
-                      }}
-                    </Typography.Paragraph>
-                    <Typography.Paragraph class="mb-0" :ellipsis="{ rows: 2 }">
-                      <Typography.Text strong>受控产物：</Typography.Text>
-                      {{ entry.foundationRequirements.controlledArtifact }}
-                    </Typography.Paragraph>
+                </div>
+                <Select
+                  v-model:value="selectedBusinessUnitCode"
+                  class="w-64"
+                  :options="
+                    roleCapabilityBusinessUnits.map((unit) => ({
+                      label: `${unit.name} · ${unit.skillCount} 个 Skill${
+                        unit.status === 'PLANNED' ? '（待接入）' : ''
+                      }`,
+                      value: unit.code,
+                    }))
+                  "
+                />
+              </div>
+            </Card>
+
+            <Alert
+              v-if="jobCapabilityCatalog?.missing_skill_names.length"
+              type="warning"
+              show-icon
+              message="部分岗位 Skill 未进入 DeerFlow 有效运行目录"
+              :description="jobCapabilityCatalog.missing_skill_names.join('、')"
+            />
+
+            <Empty
+              v-if="!selectedRoleCapabilityBusinessUnit?.domains.length"
+              :description="
+                selectedRoleCapabilityBusinessUnit?.status === 'PLANNED'
+                  ? `${selectedRoleCapabilityBusinessUnit.name} 尚未接入岗位 Skill，目录已预留且不会复用其他业务单元的运行定义。`
+                  : '当前业务板块尚未登记可展示的岗位 Skill'
+              "
+            />
+
+            <template v-else>
+              <section
+                v-for="domain in selectedRoleCapabilityBusinessUnit?.domains"
+                :key="domain.code"
+                class="role-capability-domain"
+              >
+                <div class="role-capability-domain-heading">
+                  <div>
+                    <Typography.Title :level="4" class="mb-0">
+                      {{ domain.name }}
+                    </Typography.Title>
                     <Typography.Text type="secondary" class="text-xs">
-                      {{ entry.foundationRequirements.approvalBoundary }}
+                      {{ domain.roles.length }} 个岗位 ·
+                      {{ domain.skillCount }} 个 Skill
                     </Typography.Text>
-                  </template>
-                  <template v-if="entry.automation.length">
-                    <Space wrap>
-                      <StatusTag
-                        v-bind="
-                          temporalScheduleStateSummary(
-                            entry.automation[0]?.scheduleState,
-                          )
-                        "
-                      />
-                      <StatusTag
-                        v-bind="
-                          temporalBusinessAutonomySummary(
-                            entry.automation[0]?.businessAutonomyState,
-                          )
-                        "
-                      />
-                    </Space>
-                    <Typography.Text type="secondary" class="text-xs">
-                      候选 {{ entry.automation[0]?.candidateCount ?? 0 }} 个；
-                      {{
-                        temporalDiscoverySourceSummary(
-                          entry.automation[0]?.discoverySource,
-                        ).label
-                      }}
-                    </Typography.Text>
-                  </template>
-                  <Typography.Text v-else type="secondary" class="text-xs">
-                    {{
-                      entry.capabilityStage === 'FOUNDATION_REQUIRED'
-                        ? '尚未建立候选源、受控写入点和责任人门禁'
-                        : roleAutomationEvidenceUnavailable
-                          ? '自动化实证暂不可读取'
-                          : '尚未形成自动化观测，不计入运行成功'
-                    }}
-                  </Typography.Text>
-                  <Typography.Text
-                    v-if="entry.workflowCount"
-                    type="secondary"
-                    class="block truncate text-xs"
-                    :title="entry.workflowIds.join('、')"
+                  </div>
+                  <Tag color="blue">
+                    {{ selectedRoleCapabilityBusinessUnit.name }}
+                  </Tag>
+                </div>
+
+                <Row :gutter="[16, 16]">
+                  <Col
+                    v-for="role in domain.roles"
+                    :key="role.roleCode"
+                    :xs="24"
+                    :lg="12"
+                    :xl="8"
                   >
-                    {{ entry.workflowIds.join('、') }}
+                    <Card class="h-full" size="small">
+                      <Space direction="vertical" class="w-full" :size="8">
+                        <div class="flex items-start justify-between gap-3">
+                          <div>
+                            <Typography.Text strong>
+                              {{ role.roleName }}
+                            </Typography.Text>
+                            <div class="mt-1 text-xs text-muted-foreground">
+                              {{ domain.name }} · {{ role.roleCode }}
+                            </div>
+                          </div>
+                          <StatusTag
+                            v-bind="
+                              !role.entry
+                                ? {
+                                    color: 'processing',
+                                    label: `${role.skills.length} 个平台 Skill`,
+                                  }
+                                : role.entry.workflowCount > 0
+                                  ? {
+                                      color: 'success',
+                                      label: `已登记 ${role.entry.workflowCount} 条`,
+                                    }
+                                  : { color: 'warning', label: '待补齐定义' }
+                            "
+                          />
+                        </div>
+                        <Typography.Paragraph
+                          class="mb-0"
+                          :ellipsis="{ rows: 2 }"
+                        >
+                          <Typography.Text strong>日常职责：</Typography.Text>
+                          {{
+                            role.entry?.dailyDuty ??
+                            '提供跨业务板块复用的连接、治理、策略和工程能力。'
+                          }}
+                        </Typography.Paragraph>
+                        <Typography.Paragraph
+                          class="mb-0"
+                          :ellipsis="{ rows: 2 }"
+                        >
+                          <Typography.Text strong>可验证产物：</Typography.Text>
+                          {{
+                            role.entry?.verifiableOutcome ??
+                            '运行 Skill 内容摘要、启停状态与版本一致性证据'
+                          }}
+                        </Typography.Paragraph>
+                        <Typography.Paragraph
+                          class="mb-0"
+                          :ellipsis="{ rows: 2 }"
+                        >
+                          <Typography.Text strong>
+                            外部事实门禁：
+                          </Typography.Text>
+                          {{
+                            role.entry?.externalFactGate ??
+                            '具体业务写入仍由对应领域岗位、审批和权威系统决定'
+                          }}
+                        </Typography.Paragraph>
+                        <template v-if="role.entry?.automation.length">
+                          <Space wrap>
+                            <StatusTag
+                              v-bind="
+                                temporalScheduleStateSummary(
+                                  role.entry?.automation[0]?.scheduleState,
+                                )
+                              "
+                            />
+                            <StatusTag
+                              v-bind="
+                                temporalBusinessAutonomySummary(
+                                  role.entry?.automation[0]
+                                    ?.businessAutonomyState,
+                                )
+                              "
+                            />
+                          </Space>
+                        </template>
+                        <Typography.Text
+                          v-else-if="role.entry"
+                          type="secondary"
+                          class="text-xs"
+                        >
+                          {{
+                            roleAutomationEvidenceUnavailable
+                              ? '自动化实证暂不可读取'
+                              : '尚未形成自动化观测，不计入运行成功'
+                          }}
+                        </Typography.Text>
+                        <div class="role-capability-skill-list">
+                          <div
+                            v-for="skill in role.skills"
+                            :key="skill.name"
+                            class="role-capability-skill-item"
+                          >
+                            <div class="min-w-0">
+                              <Typography.Text
+                                class="block truncate text-xs"
+                                strong
+                              >
+                                {{ skill.name }}
+                              </Typography.Text>
+                              <Typography.Text type="secondary" class="text-xs">
+                                {{ skill.enabled ? '运行中' : '已停用' }} ·
+                                {{ skill.content_sha256.slice(0, 12) }}
+                              </Typography.Text>
+                            </div>
+                            <Button
+                              type="link"
+                              size="small"
+                              @click="openSkillContent(skill.name)"
+                            >
+                              查看 Skill
+                            </Button>
+                          </div>
+                        </div>
+                      </Space>
+                    </Card>
+                  </Col>
+                </Row>
+              </section>
+            </template>
+
+            <section
+              v-if="foundationRoleCapabilityEntries.length"
+              class="role-capability-domain"
+            >
+              <div class="role-capability-domain-heading">
+                <div>
+                  <Typography.Title :level="4" class="mb-0">
+                    跨板块横向岗位（待建设）
+                  </Typography.Title>
+                  <Typography.Text type="secondary" class="text-xs">
+                    尚未接通权威数据源，不计入任何业务板块的已托管岗位。
                   </Typography.Text>
-                </Space>
-              </Card>
-            </Col>
-          </Row>
+                </div>
+              </div>
+              <Row :gutter="[16, 16]">
+                <Col
+                  v-for="entry in foundationRoleCapabilityEntries"
+                  :key="entry.ownerRole"
+                  :xs="24"
+                  :lg="12"
+                  :xl="8"
+                >
+                  <Card class="h-full" size="small">
+                    <Space direction="vertical" class="w-full" :size="8">
+                      <div class="flex items-start justify-between gap-3">
+                        <Typography.Text strong>
+                          {{ managedWorkflowOwnerRoleLabel(entry.ownerRole) }}
+                        </Typography.Text>
+                        <StatusTag color="default" label="待建设" />
+                      </div>
+                      <Typography.Paragraph class="mb-0">
+                        <Typography.Text strong>日常职责：</Typography.Text>
+                        {{ entry.dailyDuty }}
+                      </Typography.Paragraph>
+                      <Typography.Paragraph class="mb-0">
+                        <Typography.Text strong>需接通：</Typography.Text>
+                        {{
+                          entry.foundationRequirements?.authoritySources.join(
+                            '、',
+                          )
+                        }}
+                      </Typography.Paragraph>
+                      <Typography.Text type="secondary" class="text-xs">
+                        {{ entry.foundationRequirements?.approvalBoundary }}
+                      </Typography.Text>
+                    </Space>
+                  </Card>
+                </Col>
+              </Row>
+            </section>
+          </template>
         </div>
       </Tabs.TabPane>
 
@@ -1581,6 +2071,13 @@ onMounted(() => {
 
       <Tabs.TabPane key="runs" tab="运行实例">
         <div class="flex min-h-0 flex-col gap-4">
+          <Alert
+            v-if="temporalBlockWorkspace"
+            type="warning"
+            show-icon
+            message="此工作流正等待高风险审批，SkillTask 尚未启动"
+            :description="`当前阻塞节点：审批门 / 高风险业务操作。Temporal 工作流 ${temporalBlockWorkspace.temporalWorkflowId || '-'}（运行 ${temporalBlockWorkspace.temporalRunId || '-'}）正在等待审批 ID ${temporalBlockWorkspace.approvalId || '-'}；审批通过后才会创建并进入 SkillTask 的第一个编排步骤。`"
+          />
           <Alert
             v-if="managedRunFlags.unavailable"
             type="warning"
@@ -1710,36 +2207,6 @@ onMounted(() => {
 
       <Tabs.TabPane key="observations-approval" tab="观测与审批">
         <section class="approval-workspace">
-          <div class="approval-hero">
-            <div class="approval-hero-copy">
-              <div class="approval-hero-crumb">AI 运营 / 观测与审批</div>
-              <h2>审批工作台</h2>
-              <p>
-                聚焦需要人工判断的业务节点，清晰连接审批门禁、任务执行与运行观测。
-              </p>
-              <Space wrap>
-                <Button
-                  type="primary"
-                  :loading="cardsLoading"
-                  @click="loadApprovalCards"
-                >
-                  刷新队列
-                </Button>
-                <Button @click="scrollToManagedObservation">
-                  查看运行观测
-                </Button>
-              </Space>
-            </div>
-            <div class="approval-focus-metric">
-              <span>当前审批阻塞</span>
-              <strong>{{ approvalBoardStats?.pendingTotal ?? '-' }}</strong>
-              <small v-if="approvalBoardStats">
-                {{ approvalBoardStats.bpmInProgress }} 项正在 BPM 审批
-              </small>
-              <small v-else>正在加载审批汇总</small>
-            </div>
-          </div>
-
           <div class="approval-gate-note" aria-label="BPM 审批门禁说明">
             <StatusTag color="processing" label="BPM 审批门禁" />
             <span>指定审批人 → 工作流程待办 → 人工办理 → 安全确认 → 自动恢复
@@ -1850,86 +2317,171 @@ onMounted(() => {
               />
               <div v-else class="approval-card-list">
                 <article
-                  v-for="item in cards"
-                  :key="item.cardId"
-                  class="approval-card"
+                  v-for="group in pagedApprovalCardGroups"
+                  :key="group.key"
+                  class="approval-card-group"
+                  :class="{
+                    'has-multiple-items': group.items.length > 1,
+                    'is-expanded': isApprovalGroupExpanded(group.key),
+                  }"
                 >
-                  <div class="approval-card-topline">
-                    <StatusTag
-                      v-bind="getMeta(approvalStatusMeta, item.status)"
-                    />
-                    <span class="approval-card-role">{{
-                      roleName(item.roleCode)
-                    }}</span>
-                  </div>
-                  <h4>{{ approvalDecision(item)?.title || item.title }}</h4>
-                  <p class="approval-card-workflow">
-                    {{ approvalWorkflowSummary(item) }}
-                  </p>
-                  <div
-                    v-if="
-                      item.cardType === 'APPROVAL' && approvalDecision(item)
-                    "
-                    class="approval-card-decision"
-                  >
-                    <div>
-                      <span>要完成什么</span>
-                      <p>{{ approvalDecision(item)?.objective }}</p>
-                    </div>
-                    <div>
-                      <span>高风险原因</span>
-                      <p>{{ approvalDecision(item)?.riskReason }}</p>
-                    </div>
-                  </div>
-                  <Typography.Paragraph
-                    class="approval-card-summary"
-                    :ellipsis="{ rows: 2, expandable: true }"
-                  >
-                    {{
-                      item.summary ||
-                      '当前卡片只保留岗位、风险和摘要，不展示原始票据或技术上下文。'
-                    }}
-                  </Typography.Paragraph>
-                  <div class="approval-card-footer">
-                    <Space wrap>
+                  <div class="approval-card">
+                    <div class="approval-card-topline">
                       <StatusTag
-                        v-bind="{
-                          color: statusColor(item.status),
-                          label: statusNames[item.status] ?? item.status,
-                        }"
+                        v-bind="
+                          getMeta(
+                            approvalStatusMeta,
+                            firstApprovalCard(group.items).status,
+                          )
+                        "
                       />
-                      <span>{{ formatTime(item.occurredAt) }}</span>
-                    </Space>
-                    <Button
-                      v-if="item.processInstanceId"
-                      size="small"
-                      type="link"
-                      @click="openApproval(item)"
+                      <span class="approval-card-role">{{
+                        group.roleLabel
+                      }}</span>
+                    </div>
+                    <h4>{{ group.title }}</h4>
+                    <p class="approval-card-workflow">
+                      {{ approvalGroupDescription(group.items) }}
+                    </p>
+                    <div class="approval-card-action">
+                      <span>受控动作</span>
+                      <strong
+                        :title="firstApprovalCard(group.items).actionCode"
+                      >
+                        {{ group.actionLabel }}
+                      </strong>
+                      <Tag v-if="group.items.length > 1" color="blue">
+                        <span class="approval-stack-mark" aria-hidden="true">
+                          <i></i>
+                          <i></i>
+                          <i></i>
+                        </span>
+                        同类 {{ group.items.length }} 条
+                      </Tag>
+                    </div>
+                    <div class="approval-card-footer">
+                      <Space wrap>
+                        <StatusTag
+                          v-bind="{
+                            color: statusColor(
+                              firstApprovalCard(group.items).status,
+                            ),
+                            label:
+                              statusNames[
+                                firstApprovalCard(group.items).status
+                              ] ?? firstApprovalCard(group.items).status,
+                          }"
+                        />
+                        <span>{{
+                          formatTime(firstApprovalCard(group.items).occurredAt)
+                        }}</span>
+                      </Space>
+                      <Space>
+                        <Button
+                          v-if="group.items.length > 1"
+                          size="small"
+                          type="link"
+                          @click="toggleApprovalGroup(group.key)"
+                        >
+                          {{
+                            isApprovalGroupExpanded(group.key)
+                              ? '收起同类事项'
+                              : `展开 ${group.items.length} 条`
+                          }}
+                        </Button>
+                        <Button
+                          v-if="
+                            firstApprovalCard(group.items).processInstanceId
+                          "
+                          size="small"
+                          type="link"
+                          @click="openApproval(firstApprovalCard(group.items))"
+                        >
+                          查看审批详情
+                        </Button>
+                        <Button
+                          v-else-if="
+                            firstApprovalCard(group.items).cardType ===
+                              'APPROVAL' &&
+                            firstApprovalCard(group.items).status ===
+                              'PENDING' &&
+                            firstApprovalCard(group.items).workflowStatus ===
+                              'START_REQUESTED' &&
+                            hasAccessByCodes([
+                              'cloudmold:agent-control:govern',
+                            ]) &&
+                            Number(userStore.userInfo?.id) !==
+                              firstApprovalCard(group.items).requesterUserId
+                          "
+                          size="small"
+                          type="link"
+                          @click="
+                            openApprovalAssignment(
+                              firstApprovalCard(group.items),
+                            )
+                          "
+                        >
+                          指定审批人
+                        </Button>
+                      </Space>
+                    </div>
+                    <div
+                      v-if="isApprovalGroupExpanded(group.key)"
+                      class="approval-card-group-items"
                     >
-                      审阅业务影响与流程
-                    </Button>
-                    <Button
-                      v-else-if="
-                        item.cardType === 'APPROVAL' &&
-                        item.status === 'PENDING' &&
-                        item.workflowStatus === 'START_REQUESTED' &&
-                        hasAccessByCodes(['cloudmold:agent-control:govern']) &&
-                        Number(userStore.userInfo?.id) !== item.requesterUserId
-                      "
-                      size="small"
-                      type="link"
-                      @click="openApprovalAssignment(item)"
-                    >
-                      指定审批人
-                    </Button>
-                    <Typography.Text
-                      v-else-if="item.workflowStatus === 'START_UNCERTAIN'"
-                      type="warning"
-                    >
-                      需对账
-                    </Typography.Text>
+                      <div
+                        v-for="item in group.items"
+                        :key="item.cardId"
+                        class="approval-card-group-item"
+                      >
+                        <time class="approval-card-group-item-time">
+                          {{ formatTime(item.occurredAt) }}
+                        </time>
+                        <span class="approval-card-group-item-summary">
+                          {{ approvalWorkflowSummary(item) }}
+                        </span>
+                        <Button
+                          v-if="item.processInstanceId"
+                          size="small"
+                          type="link"
+                          @click="openApproval(item)"
+                        >
+                          查看详情
+                        </Button>
+                        <Button
+                          v-else-if="
+                            item.cardType === 'APPROVAL' &&
+                            item.status === 'PENDING' &&
+                            item.workflowStatus === 'START_REQUESTED' &&
+                            hasAccessByCodes([
+                              'cloudmold:agent-control:govern',
+                            ]) &&
+                            Number(userStore.userInfo?.id) !==
+                              item.requesterUserId
+                          "
+                          size="small"
+                          type="link"
+                          @click="openApprovalAssignment(item)"
+                        >
+                          指定审批人
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </article>
+              </div>
+              <div
+                v-if="approvalCardGroups.length > approvalPageSize"
+                class="approval-pagination"
+              >
+                <Pagination
+                  v-model:current="approvalPage"
+                  :page-size="approvalPageSize"
+                  :show-size-changer="false"
+                  :total="approvalCardGroups.length"
+                  show-less-items
+                  size="small"
+                />
               </div>
             </section>
 
@@ -2060,6 +2612,40 @@ onMounted(() => {
         </section>
       </Tabs.TabPane>
     </Tabs>
+
+    <Modal
+      v-model:open="skillContentOpen"
+      :title="`岗位 Skill · ${selectedSkillName}`"
+      :footer="null"
+      width="900px"
+    >
+      <Card :loading="skillContentLoading" size="small">
+        <template v-if="selectedSkillContent">
+          <Descriptions bordered size="small" :column="1" class="mb-4">
+            <DescriptionsItem label="业务归属">
+              {{
+                selectedSkillContent.classifications
+                  .map(
+                    (item) =>
+                      `${item.business_unit_name} / ${item.domain_name} / ${item.role_name}`,
+                  )
+                  .join('；')
+              }}
+            </DescriptionsItem>
+            <DescriptionsItem label="内容摘要">
+              {{ selectedSkillContent.content_sha256 }}
+            </DescriptionsItem>
+          </Descriptions>
+          <pre class="role-capability-skill-content">{{
+            selectedSkillContent.content
+          }}</pre>
+        </template>
+        <Empty
+          v-else-if="!skillContentLoading"
+          description="未读取到岗位 Skill 内容"
+        />
+      </Card>
+    </Modal>
 
     <Drawer
       v-model:open="detailOpen"
@@ -2229,54 +2815,164 @@ onMounted(() => {
         />
       </div>
     </Modal>
-
-    <Drawer
-      v-model:open="workflowDetailOpen"
-      title="托管工作流详情"
-      width="620"
-    >
-      <Descriptions v-if="selectedWorkflow" :column="1" bordered size="small">
-        <DescriptionsItem label="中文名称">
-          {{ selectedWorkflow.displayName }}
-        </DescriptionsItem>
-        <DescriptionsItem label="用途说明">
-          {{ selectedWorkflow.description }}
-        </DescriptionsItem>
-        <DescriptionsItem label="负责岗位">
-          {{ managedWorkflowOwnerRoleLabel(selectedWorkflow.ownerRole) }}
-        </DescriptionsItem>
-        <DescriptionsItem label="Skill ID">
-          <CopyIdCell :value="selectedWorkflow.skillId" label="Skill ID" />
-        </DescriptionsItem>
-        <DescriptionsItem label="版本">
-          {{ selectedWorkflow.skillVersion }}
-        </DescriptionsItem>
-        <DescriptionsItem label="风险等级">
-          {{ selectedWorkflow.riskLevel }}
-        </DescriptionsItem>
-        <DescriptionsItem label="执行规模">
-          {{ selectedWorkflow.stepCount }} 步，其中
-          {{ selectedWorkflow.writeStepCount }} 个写操作；最多尝试
-          {{ selectedWorkflow.maxAttempts }} 次
-        </DescriptionsItem>
-        <DescriptionsItem label="审批卡口">
-          {{ selectedWorkflow.approvalRequired ? '需要 BPM 审批' : '无需审批' }}
-        </DescriptionsItem>
-        <DescriptionsItem label="运行架构">
-          后台管理系统触发 · DeerFlow 编排 · SkillTask 持久化
-        </DescriptionsItem>
-        <DescriptionsItem label="定义闭包哈希">
-          <CopyIdCell
-            :value="selectedWorkflow.definitionClosureSha256"
-            label="定义闭包哈希"
-          />
-        </DescriptionsItem>
-      </Descriptions>
-    </Drawer>
   </Page>
 </template>
 
 <style scoped>
+.role-capability-unit-selector {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border));
+}
+
+.role-capability-domain {
+  padding: 18px;
+  background: hsl(var(--muted) / 28%);
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+}
+
+.role-capability-domain-heading {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.role-capability-skill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding-top: 8px;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.role-capability-skill-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 8px 10px;
+  background: hsl(var(--muted) / 45%);
+  border-radius: 8px;
+}
+
+.role-capability-skill-content {
+  max-height: 56vh;
+  padding: 16px;
+  margin: 0;
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  background: hsl(var(--muted) / 55%);
+  border-radius: 10px;
+}
+
+.ai-operations-command-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 24px;
+  padding: 20px 24px 0;
+  margin-bottom: 16px;
+  background: linear-gradient(
+    112deg,
+    hsl(var(--card)) 0%,
+    hsl(var(--card)) 72%,
+    hsl(var(--primary) / 8%) 100%
+  );
+  border: 1px solid hsl(var(--border));
+  border-radius: 16px;
+}
+
+.ai-operations-command-copy {
+  min-width: 0;
+}
+
+.ai-operations-command-copy > span {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: hsl(var(--primary));
+  letter-spacing: 0.05em;
+}
+
+.ai-operations-command-copy h1 {
+  margin: 5px 0 0;
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 1.25;
+  color: hsl(var(--foreground));
+}
+
+.ai-operations-command-copy p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: hsl(var(--muted-foreground));
+}
+
+.ai-operations-refresh {
+  align-self: center;
+}
+
+.ai-operations-tab-strip {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 4px;
+  margin: 0 -8px;
+  overflow-x: auto;
+}
+
+.ai-operations-tab-strip button {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 10px 14px 12px;
+  font-size: 14px;
+  line-height: 20px;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.ai-operations-tab-strip button:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted) / 70%);
+  border-radius: 8px 8px 0 0;
+}
+
+.ai-operations-tab-strip button.is-active {
+  font-weight: 600;
+  color: hsl(var(--primary));
+}
+
+.ai-operations-tab-strip button.is-active::after {
+  position: absolute;
+  right: 14px;
+  bottom: 0;
+  left: 14px;
+  height: 3px;
+  content: '';
+  background: hsl(var(--primary));
+  border-radius: 999px;
+}
+
+.cloudmold-grid-tabs :deep(.ant-tabs-nav) {
+  display: none;
+}
+
+.cloudmold-grid-tabs :deep(.ant-tabs-content-holder) {
+  overflow: visible;
+}
+
+.cloudmold-grid-tabs :deep(.ant-tabs-tabpane) {
+  min-height: 0;
+}
+
 .approval-workspace {
   display: flex;
   flex-direction: column;
@@ -2285,41 +2981,16 @@ onMounted(() => {
   padding-bottom: 8px;
 }
 
-.approval-hero,
 .approval-funnel,
 .approval-queue,
 .approval-observation-aside,
 .approval-observation-detail {
+  padding: 20px;
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
   border-radius: 16px;
 }
 
-.approval-hero {
-  display: flex;
-  gap: 24px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 28px 32px;
-  overflow: hidden;
-  background:
-    radial-gradient(
-      circle at right top,
-      hsl(var(--primary) / 14%),
-      transparent 35%
-    ),
-    linear-gradient(
-      122deg,
-      hsl(var(--card)) 0%,
-      hsl(var(--background-deep)) 100%
-    );
-}
-
-.approval-hero-copy {
-  min-width: 0;
-}
-
-.approval-hero-crumb,
 .approval-eyebrow {
   font-size: 12px;
   font-weight: 600;
@@ -2327,51 +2998,31 @@ onMounted(() => {
   letter-spacing: 0.06em;
 }
 
-.approval-hero h2,
 .approval-section-heading h3,
 .approval-queue-heading h3,
 .approval-observation-aside h3 {
   margin: 6px 0 0;
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 650;
   line-height: 1.3;
   color: hsl(var(--foreground));
 }
 
-.approval-hero p,
 .approval-observation-aside > div > p {
   max-width: 620px;
-  margin: 8px 0 16px;
+  margin: 8px 0 0;
+  font-size: 13px;
   line-height: 1.75;
   color: hsl(var(--muted-foreground));
 }
 
-.approval-focus-metric {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  min-width: 184px;
-  padding: 4px 0 4px 24px;
-  border-left: 1px solid hsl(var(--border));
-}
-
-.approval-focus-metric span,
-.approval-focus-metric small,
 .approval-section-hint,
 .approval-metric span,
 .approval-card-role,
 .approval-card-footer,
-.approval-card-decision span,
 .approval-safety-rule span {
   font-size: 12px;
   color: hsl(var(--muted-foreground));
-}
-
-.approval-focus-metric strong {
-  font-size: 42px;
-  font-weight: 650;
-  line-height: 1.15;
-  color: hsl(var(--primary));
 }
 
 .approval-gate-note {
@@ -2391,25 +3042,12 @@ onMounted(() => {
   color: hsl(var(--muted-foreground));
 }
 
-.approval-funnel,
-.approval-queue,
-.approval-observation-aside,
-.approval-observation-detail {
-  padding: 20px;
-}
-
 .approval-section-heading,
 .approval-queue-heading {
   display: flex;
   gap: 16px;
   align-items: center;
   justify-content: space-between;
-}
-
-.approval-section-heading h3,
-.approval-queue-heading h3,
-.approval-observation-aside h3 {
-  font-size: 18px;
 }
 
 .approval-metric-grid {
@@ -2468,13 +3106,20 @@ onMounted(() => {
 
 .approval-card-list {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px 16px;
   margin-top: 18px;
 }
 
+.approval-card-group {
+  min-width: 0;
+}
+
 .approval-card {
+  display: flex;
+  flex-direction: column;
   padding: 16px;
-  background: hsl(var(--background-deep) / 35%);
+  background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
   border-radius: 12px;
   transition:
@@ -2510,37 +3155,114 @@ onMounted(() => {
   color: hsl(var(--muted-foreground));
 }
 
-.approval-card-decision {
-  display: grid;
-  gap: 9px;
-  padding: 12px;
+.approval-card-action {
+  display: flex;
+  gap: 8px;
+  align-items: center;
   margin-top: 12px;
-  background: hsl(var(--muted) / 58%);
-  border-radius: 10px;
+  font-size: 12px;
 }
 
-.approval-card-decision span {
+.approval-card-action :deep(.ant-tag) {
+  margin-inline: auto 0;
+}
+
+.approval-stack-mark {
+  position: relative;
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 3px;
+  vertical-align: -2px;
+}
+
+.approval-stack-mark i {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: hsl(var(--primary) / 8%);
+  border: 1px solid hsl(var(--primary) / 45%);
+  border-radius: 2px;
+}
+
+.approval-stack-mark i:nth-child(1) {
+  top: 0;
+  left: 0;
+}
+
+.approval-stack-mark i:nth-child(2) {
+  top: 2px;
+  left: 2px;
+}
+
+.approval-stack-mark i:nth-child(3) {
+  top: 4px;
+  left: 4px;
+  background: hsl(var(--card));
+}
+
+.approval-card-action span {
+  color: hsl(var(--muted-foreground));
+}
+
+.approval-card-action strong {
   font-weight: 600;
   color: hsl(var(--foreground));
-}
-
-.approval-card-decision p {
-  margin: 3px 0 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: hsl(var(--muted-foreground));
-}
-
-.approval-card-summary {
-  margin: 12px 0 !important;
-  font-size: 13px;
-  line-height: 1.65;
-  color: hsl(var(--muted-foreground));
 }
 
 .approval-card-footer {
   padding-top: 12px;
   border-top: 1px solid hsl(var(--border));
+}
+
+.approval-card-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  margin-top: 10px;
+  background: hsl(var(--background-deep) / 36%);
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 hsl(var(--card));
+}
+
+.approval-card-group-item {
+  display: grid;
+  grid-template-columns: 154px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  min-height: 32px;
+  padding: 4px 0;
+}
+
+.approval-card-group-item + .approval-card-group-item {
+  border-top: 1px solid hsl(var(--border) / 72%);
+}
+
+.approval-card-group-item-time,
+.approval-card-group-item-summary {
+  min-width: 0;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+}
+
+.approval-card-group-item-time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.approval-card-group-item-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.approval-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 
 .approval-observation-aside {
@@ -2550,11 +3272,6 @@ onMounted(() => {
   background:
     linear-gradient(180deg, hsl(var(--primary) / 8%), transparent 42%),
     hsl(var(--card));
-}
-
-.approval-observation-aside > div > p {
-  margin-bottom: 0;
-  font-size: 13px;
 }
 
 .approval-observation-status {
@@ -2635,17 +3352,13 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .approval-hero {
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 22px;
+  .ai-operations-command-bar {
+    grid-template-columns: 1fr;
+    padding: 18px 18px 0;
   }
 
-  .approval-focus-metric {
-    align-items: flex-start;
-    padding: 16px 0 0;
-    border-top: 1px solid hsl(var(--border));
-    border-left: 0;
+  .ai-operations-refresh {
+    justify-self: start;
   }
 
   .approval-section-heading,
@@ -2657,6 +3370,10 @@ onMounted(() => {
 
   .approval-metric-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .approval-card-list {
+    grid-template-columns: 1fr;
   }
 
   .approval-filter {

@@ -32,6 +32,98 @@ export namespace CloudMoldAiOperationsApi {
     records?: ManagedWorkflow[];
   }
 
+  export interface BusinessSkillSummary {
+    category: 'integrations' | 'public';
+    content_sha256: string;
+    description: string;
+    enabled: boolean;
+    name: string;
+  }
+
+  export interface BusinessRoleSkillGroup {
+    code: string;
+    enabled_skill_count: number;
+    name: string;
+    order: number;
+    skill_count: number;
+    skills: BusinessSkillSummary[];
+  }
+
+  export interface BusinessDomainSkillGroup {
+    code: string;
+    enabled_skill_count: number;
+    name: string;
+    order: number;
+    role_count?: number;
+    roles: BusinessRoleSkillGroup[];
+    skill_count: number;
+  }
+
+  export interface BusinessUnitSkillGroup {
+    code: string;
+    domains: BusinessDomainSkillGroup[];
+    enabled_skill_count: number;
+    name: string;
+    order: number;
+    skill_count: number;
+    status: 'ACTIVE' | 'PLANNED' | string;
+  }
+
+  export interface BusinessSkillCatalog {
+    assigned_skill_count: number;
+    business_units: BusinessUnitSkillGroup[];
+    catalog_sha256: string;
+    enabled_assigned_skill_count: number;
+    enabled_skill_count: number;
+    missing_skill_names: string[];
+    schema_version: string;
+    skill_count: number;
+    taxonomy_sha256: string;
+  }
+
+  export interface BusinessSkillClassification {
+    business_unit_code: string;
+    business_unit_name: string;
+    domain_code: string;
+    domain_name: string;
+    role_code: string;
+    role_name: string;
+  }
+
+  export interface BusinessSkillContent extends BusinessSkillSummary {
+    body: string;
+    classifications: BusinessSkillClassification[];
+    content: string;
+    detail_sha256: string;
+    metadata: Record<string, unknown>;
+    taxonomy_sha256: string;
+  }
+
+  export interface ManagedWorkflowStep {
+    approvalRequired?: boolean;
+    argumentsJson?: string;
+    capabilityId?: string;
+    childSkillId?: string;
+    childSkillVersion?: string;
+    displayName: string;
+    idempotencyBinding?: {
+      argumentIndex?: number;
+      jsonPointer?: string;
+    };
+    operationType?: string;
+    pollIntervalSeconds?: number;
+    stepCode: string;
+    stepKind: string;
+    stepOrder: number;
+    waitFailureJson?: string;
+    waitSuccessJson?: string;
+  }
+
+  export interface ManagedWorkflowDetail {
+    steps: ManagedWorkflowStep[];
+    workflow: ManagedWorkflow;
+  }
+
   export interface TemporalSchedule {
     cronExpression?: string;
     definitionClosureSha256?: string;
@@ -84,6 +176,18 @@ export namespace CloudMoldAiOperationsApi {
     scheduleCoverageRate: number;
     scheduledCount: number;
     workflows: TemporalAutomationWorkflow[];
+  }
+
+  export interface TemporalApprovalBlock {
+    approvalId: string;
+    managedRunId?: string;
+    scheduleId?: string;
+    skillTaskId?: string;
+    status: string;
+    temporalRunId: string;
+    temporalWorkflowId: string;
+    updatedAt?: string;
+    workOrderId: string;
   }
 
   export interface ManagedRun {
@@ -442,6 +546,30 @@ export function getCloudMoldManagedWorkflowList() {
     | CloudMoldAiOperationsApi.ManagedWorkflow[]
     | CloudMoldAiOperationsApi.ManagedWorkflowListEnvelope
   >('/cloudmold/ai-operations/managed-workflows');
+}
+
+export function getCloudMoldJobCapabilityCatalog() {
+  return requestClient.get<CloudMoldAiOperationsApi.BusinessSkillCatalog>(
+    '/cloudmold/ai-operations/job-capabilities',
+  );
+}
+
+export function getCloudMoldJobCapabilitySkill(skillName: string) {
+  return requestClient.get<CloudMoldAiOperationsApi.BusinessSkillContent>(
+    `/cloudmold/ai-operations/job-capabilities/${encodeURIComponent(skillName)}`,
+  );
+}
+
+export function getCloudMoldManagedWorkflowDetail(skillId: string) {
+  return requestClient.get<CloudMoldAiOperationsApi.ManagedWorkflowDetail>(
+    `/cloudmold/ai-operations/managed-workflows/${encodeURIComponent(skillId)}`,
+  );
+}
+
+export function getCloudMoldTemporalApprovalBlock(approvalId: string) {
+  return requestClient.get<CloudMoldAiOperationsApi.TemporalApprovalBlock>(
+    `/cloudmold/ai-operations/temporal-runs/approval/${encodeURIComponent(approvalId)}`,
+  );
 }
 
 export function getCloudMoldManagedRunPage(params: PageParam) {

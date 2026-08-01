@@ -152,12 +152,12 @@ describe('cloudmold administration navigation', () => {
     ).length;
 
     expect(groupedPageCount).toBe(11);
-    expect(directOperationsPageCount).toBe(13);
+    expect(directOperationsPageCount).toBe(14);
     expect(operationsRoot.meta?.hideInMenu).toBe(true);
     expect(hiddenDirectPageCount).toBe(4);
     expect(
       groupedPageCount! + directOperationsPageCount! + hiddenDirectPageCount!,
-    ).toBe(28);
+    ).toBe(29);
   });
 
   it('registers L3 diagnostics as stable routes outside backend menus', () => {
@@ -175,8 +175,12 @@ describe('cloudmold administration navigation', () => {
       accessRoutes.some((route) => route.name === 'CloudMoldOperationsQuery'),
     ).toBe(false);
     expect(coreRouteNames).toContain('CloudMoldAiWorkflowRun');
+    expect(coreRouteNames).toContain('CloudMoldAiWorkflowDetail');
     expect(router.resolve('/cloudmold/operations/ai-workflow-run').name).toBe(
       'CloudMoldAiWorkflowRun',
     );
+    expect(
+      router.resolve('/cloudmold/operations/ai-workflow-detail').name,
+    ).toBe('CloudMoldAiWorkflowDetail');
   });
 });
