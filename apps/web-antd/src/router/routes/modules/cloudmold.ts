@@ -158,6 +158,15 @@ const routes: RouteRecordRaw[] = [
         },
         children: [
           {
+            path: 'inventory',
+            name: 'CloudMoldInventoryOverview',
+            component: () => import('#/views/cloudmold/inventory/index.vue'),
+            meta: {
+              title: '库存总览',
+              authority: ['cloudmold:inventory:query'],
+            },
+          },
+          {
             path: 'balances',
             name: 'CloudMoldInventoryBalances',
             component: () => import('#/views/cloudmold/inventory/index.vue'),

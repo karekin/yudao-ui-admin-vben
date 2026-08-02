@@ -38,7 +38,7 @@ describe('cloudmold administration navigation', () => {
     ).toEqual(groups.map(([, title]) => title));
     expect(
       groups.map(([name]) => childByName(root, name)?.children?.length),
-    ).toEqual([2, 2, 3, 3, 4, 6, 2, 4, 1]);
+    ).toEqual([2, 2, 3, 3, 5, 6, 2, 4, 1]);
   });
 
   it('uses operator-facing labels instead of canonical-model terminology', () => {
@@ -71,6 +71,7 @@ describe('cloudmold administration navigation', () => {
       '销量与需求计划',
       '供应计划与情景',
       '补货计划',
+      '库存总览',
       '库存余额',
       '预占与分配',
       '库存流水',
@@ -157,6 +158,10 @@ describe('cloudmold administration navigation', () => {
     const procurement = childByName(root, 'CloudMoldProcurementCenter')!;
     const planning = childByName(root, 'CloudMoldSupplyPlanningCenter')!;
     const inventory = childByName(root, 'CloudMoldInventoryControlCenter')!;
+    const inventoryOverview = childByName(
+      inventory,
+      'CloudMoldInventoryOverview',
+    );
     const inbound = childByName(warehouse, 'CloudMoldProcurementInbound');
     const quality = childByName(procurement, 'CloudMoldProcurementQuality');
     const demandPlans = childByName(planning, 'CloudMoldDemandPlans');
@@ -164,6 +169,10 @@ describe('cloudmold administration navigation', () => {
     const replenishments = childByName(planning, 'CloudMoldReplenishments');
     const inventoryHealth = childByName(inventory, 'CloudMoldInventoryHealth');
 
+    expect(inventoryOverview?.path).toBe('inventory');
+    expect(inventoryOverview?.meta?.authority).toEqual([
+      'cloudmold:inventory:query',
+    ]);
     expect(inbound?.path).toBe('procurement-inbound');
     expect(inbound?.meta?.authority).toEqual(['cloudmold:warehouse:query']);
     expect(quality?.path).toBe('incoming-quality');
@@ -201,6 +210,9 @@ describe('cloudmold administration navigation', () => {
     );
     expect(router.resolve('/cloudmold/planning/replenishments').name).toBe(
       'CloudMoldReplenishments',
+    );
+    expect(router.resolve('/cloudmold/inventory-control/inventory').name).toBe(
+      'CloudMoldInventoryOverview',
     );
     expect(
       router.resolve('/cloudmold/inventory-control/inventory-health').name,
@@ -264,13 +276,13 @@ describe('cloudmold administration navigation', () => {
       (route) => route.component && route.meta?.hideInMenu,
     ).length;
 
-    expect(groupedPageCount).toBe(27);
+    expect(groupedPageCount).toBe(28);
     expect(directOperationsPageCount).toBe(14);
     expect(operationsRoot.meta?.hideInMenu).toBe(true);
     expect(hiddenDirectPageCount).toBe(4);
     expect(
       groupedPageCount! + directOperationsPageCount! + hiddenDirectPageCount!,
-    ).toBe(45);
+    ).toBe(46);
   });
 
   it('registers L3 diagnostics as stable routes outside backend menus', () => {
