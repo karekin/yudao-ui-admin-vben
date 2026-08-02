@@ -3,8 +3,8 @@ import type { RouteRecordRaw } from 'vue-router';
 /**
  * CloudMold-owned routes are isolated from upstream yudao route modules.
  * Backend-menu mode resolves the same hierarchy from system_menu; these routes
- * keep frontend access mode, direct development navigation, and old bookmarks
- * available without leaking unavailable capabilities into the sidebar.
+ * keep frontend access mode and direct development navigation aligned with the
+ * canonical backend menu hierarchy.
  */
 const routes: RouteRecordRaw[] = [
   {
@@ -107,6 +107,92 @@ const routes: RouteRecordRaw[] = [
             meta: {
               title: '库存调拨',
               authority: ['cloudmold:warehouse:query'],
+            },
+          },
+          {
+            path: 'procurement-inbound',
+            name: 'CloudMoldProcurementInbound',
+            component: () =>
+              import('#/views/cloudmold/procurement-inbound/index.vue'),
+            meta: {
+              title: '采购收货与上架',
+              authority: ['cloudmold:warehouse:query'],
+            },
+          },
+        ],
+      },
+      {
+        path: 'procurement-center',
+        name: 'CloudMoldProcurementCenter',
+        meta: {
+          title: '采购与寻源',
+          icon: 'lucide:handshake',
+        },
+        children: [
+          {
+            path: 'workbench',
+            name: 'CloudMoldProcurement',
+            component: () => import('#/views/cloudmold/procurement/index.vue'),
+            meta: {
+              title: '寻源与定标',
+              authority: [
+                'cloudmold:procurement:requisition:query',
+                'cloudmold:procurement:sourcing:query',
+                'cloudmold:procurement:quotation:query',
+                'cloudmold:procurement:award:query',
+                'cloudmold:procurement:order:query',
+              ],
+            },
+          },
+          {
+            path: 'awards/:awardId',
+            name: 'CloudMoldProcurementAwardDetail',
+            component: () => import('#/views/cloudmold/procurement/index.vue'),
+            meta: {
+              title: '定标详情',
+              hideInMenu: true,
+              authority: ['cloudmold:procurement:award:query'],
+            },
+          },
+          {
+            path: 'incoming-quality',
+            name: 'CloudMoldProcurementQuality',
+            component: () =>
+              import('#/views/cloudmold/procurement-quality/index.vue'),
+            meta: {
+              title: '来料质检处置',
+              authority: [
+                'cloudmold:quality:procurement-receipt-inspection:query',
+              ],
+            },
+          },
+        ],
+      },
+      {
+        path: 'finance-center',
+        name: 'CloudMoldFinanceCenter',
+        meta: {
+          title: '财务与风控',
+          icon: 'lucide:landmark',
+        },
+        children: [
+          {
+            path: 'procure-to-pay',
+            name: 'CloudMoldProcureToPay',
+            component: () => import('#/views/cloudmold/finance/index.vue'),
+            meta: {
+              title: '应付与匹配',
+              authority: ['cloudmold:finance:procure-to-pay:query'],
+            },
+          },
+          {
+            path: 'supplier-invoices/:supplierInvoiceId',
+            name: 'CloudMoldSupplierInvoiceDetail',
+            component: () => import('#/views/cloudmold/finance/index.vue'),
+            meta: {
+              title: '供应商发票匹配详情',
+              hideInMenu: true,
+              authority: ['cloudmold:finance:procure-to-pay:query'],
             },
           },
         ],
@@ -230,78 +316,6 @@ const routes: RouteRecordRaw[] = [
           hideInMenu: true,
           authority: ['cloudmold:agent-control:query'],
         },
-      },
-      {
-        path: 'catalog',
-        name: 'CloudMoldLegacyCatalogRedirect',
-        redirect: '/cloudmold/product-center/products',
-        meta: { hideInMenu: true, title: '商品管理' },
-      },
-      {
-        path: 'listing',
-        name: 'CloudMoldLegacyListingRedirect',
-        redirect: '/cloudmold/product-center/channel-products',
-        meta: { hideInMenu: true, title: '渠道商品' },
-      },
-      {
-        path: 'merchant',
-        name: 'CloudMoldLegacyMerchantRedirect',
-        redirect: '/cloudmold/merchant-channel/merchants',
-        meta: { hideInMenu: true, title: '商家管理' },
-      },
-      {
-        path: 'identity',
-        name: 'CloudMoldLegacyIdentityRedirect',
-        redirect: '/cloudmold/merchant-channel/identities',
-        meta: { hideInMenu: true, title: '经营主体与授权' },
-      },
-      {
-        path: 'inventory',
-        name: 'CloudMoldLegacyInventoryRedirect',
-        redirect: '/cloudmold/inventory-warehouse/inventory',
-        meta: { hideInMenu: true, title: '库存管理' },
-      },
-      {
-        path: 'warehouse',
-        name: 'CloudMoldLegacyWarehouseRedirect',
-        redirect: '/cloudmold/inventory-warehouse/warehouses',
-        meta: { hideInMenu: true, title: '仓库与库位' },
-      },
-      {
-        path: 'stock-transfer',
-        name: 'CloudMoldLegacyStockTransferRedirect',
-        redirect: '/cloudmold/inventory-warehouse/stock-transfers',
-        meta: { hideInMenu: true, title: '库存调拨' },
-      },
-      {
-        path: 'order',
-        name: 'CloudMoldLegacyOrderRedirect',
-        redirect: '/cloudmold/order-fulfillment/orders',
-        meta: { hideInMenu: true, title: '订单管理' },
-      },
-      {
-        path: 'payment',
-        name: 'CloudMoldLegacyPaymentRedirect',
-        redirect: '/cloudmold/order-fulfillment/payments',
-        meta: { hideInMenu: true, title: '支付记录' },
-      },
-      {
-        path: 'fulfillment',
-        name: 'CloudMoldLegacyFulfillmentRedirect',
-        redirect: '/cloudmold/order-fulfillment/fulfillments',
-        meta: { hideInMenu: true, title: '发货履约' },
-      },
-      {
-        path: 'aftersale',
-        name: 'CloudMoldLegacyAfterSaleRedirect',
-        redirect: '/cloudmold/order-fulfillment/aftersales',
-        meta: { hideInMenu: true, title: '售后退款' },
-      },
-      {
-        path: 'data-readiness',
-        name: 'CloudMoldLegacyDataReadinessRedirect',
-        redirect: '/cloudmold/data-operations/health',
-        meta: { hideInMenu: true, title: '数据健康' },
       },
     ],
   },

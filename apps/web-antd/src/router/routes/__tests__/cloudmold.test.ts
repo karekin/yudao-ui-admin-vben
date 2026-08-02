@@ -25,6 +25,8 @@ describe('cloudmold administration navigation', () => {
       ['CloudMoldProductCenter', '商品中心'],
       ['CloudMoldMerchantChannel', '商家与渠道'],
       ['CloudMoldInventoryWarehouse', '库存与仓储'],
+      ['CloudMoldProcurementCenter', '采购与寻源'],
+      ['CloudMoldFinanceCenter', '财务与风控'],
       ['CloudMoldOrderFulfillment', '订单与履约'],
       ['CloudMoldDataOperations', '数据运营'],
     ] as const;
@@ -34,15 +36,17 @@ describe('cloudmold administration navigation', () => {
     ).toEqual(groups.map(([, title]) => title));
     expect(
       groups.map(([name]) => childByName(root, name)?.children?.length),
-    ).toEqual([2, 2, 3, 4, 1]);
+    ).toEqual([2, 2, 4, 3, 2, 4, 1]);
   });
 
   it('uses operator-facing labels instead of canonical-model terminology', () => {
     const groupNames = new Set([
       'CloudMoldDataOperations',
+      'CloudMoldFinanceCenter',
       'CloudMoldInventoryWarehouse',
       'CloudMoldMerchantChannel',
       'CloudMoldOrderFulfillment',
+      'CloudMoldProcurementCenter',
       'CloudMoldProductCenter',
     ]);
     const pageTitles = root.children
@@ -60,6 +64,12 @@ describe('cloudmold administration navigation', () => {
       '库存管理',
       '仓库与库位',
       '库存调拨',
+      '采购收货与上架',
+      '寻源与定标',
+      '定标详情',
+      '来料质检处置',
+      '应付与匹配',
+      '供应商发票匹配详情',
       '订单管理',
       '支付记录',
       '发货履约',
@@ -67,6 +77,110 @@ describe('cloudmold administration navigation', () => {
       '数据健康',
     ]);
     expect(pageTitles?.some((title) => title.startsWith('规范'))).toBe(false);
+  });
+
+  it('registers CloudMold-only procurement and finance workbenches with hidden details', () => {
+    const procurement = childByName(root, 'CloudMoldProcurementCenter')!;
+    const finance = childByName(root, 'CloudMoldFinanceCenter')!;
+    const procurementWorkbench = childByName(
+      procurement,
+      'CloudMoldProcurement',
+    );
+    const awardDetail = childByName(
+      procurement,
+      'CloudMoldProcurementAwardDetail',
+    );
+    const financeWorkbench = childByName(finance, 'CloudMoldProcureToPay');
+    const invoiceDetail = childByName(
+      finance,
+      'CloudMoldSupplierInvoiceDetail',
+    );
+
+    expect(procurementWorkbench?.path).toBe('workbench');
+    expect(procurementWorkbench?.meta?.authority).toEqual([
+      'cloudmold:procurement:requisition:query',
+      'cloudmold:procurement:sourcing:query',
+      'cloudmold:procurement:quotation:query',
+      'cloudmold:procurement:award:query',
+      'cloudmold:procurement:order:query',
+    ]);
+    expect(awardDetail?.path).toBe('awards/:awardId');
+    expect(awardDetail?.meta?.hideInMenu).toBe(true);
+    expect(awardDetail?.meta?.authority).toEqual([
+      'cloudmold:procurement:award:query',
+    ]);
+
+    expect(financeWorkbench?.path).toBe('procure-to-pay');
+    expect(financeWorkbench?.meta?.authority).toEqual([
+      'cloudmold:finance:procure-to-pay:query',
+    ]);
+    expect(invoiceDetail?.path).toBe('supplier-invoices/:supplierInvoiceId');
+    expect(invoiceDetail?.meta?.hideInMenu).toBe(true);
+    expect(invoiceDetail?.meta?.authority).toEqual([
+      'cloudmold:finance:procure-to-pay:query',
+    ]);
+
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes,
+    });
+    expect(router.resolve('/cloudmold/procurement-center/workbench').name).toBe(
+      'CloudMoldProcurement',
+    );
+    expect(
+      router.resolve('/cloudmold/procurement-center/awards/award-1').name,
+    ).toBe('CloudMoldProcurementAwardDetail');
+    expect(
+      router.resolve('/cloudmold/finance-center/procure-to-pay').name,
+    ).toBe('CloudMoldProcureToPay');
+    expect(
+      router.resolve('/cloudmold/finance-center/supplier-invoices/invoice-1')
+        .name,
+    ).toBe('CloudMoldSupplierInvoiceDetail');
+  });
+
+  it('registers final Figma-backed inbound and incoming-quality workbenches', () => {
+    const inventory = childByName(root, 'CloudMoldInventoryWarehouse')!;
+    const procurement = childByName(root, 'CloudMoldProcurementCenter')!;
+    const inbound = childByName(inventory, 'CloudMoldProcurementInbound');
+    const quality = childByName(procurement, 'CloudMoldProcurementQuality');
+
+    expect(inbound?.path).toBe('procurement-inbound');
+    expect(inbound?.meta?.authority).toEqual(['cloudmold:warehouse:query']);
+    expect(quality?.path).toBe('incoming-quality');
+    expect(quality?.meta?.authority).toEqual([
+      'cloudmold:quality:procurement-receipt-inspection:query',
+    ]);
+
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes,
+    });
+    expect(
+      router.resolve('/cloudmold/inventory-warehouse/procurement-inbound').name,
+    ).toBe('CloudMoldProcurementInbound');
+    expect(
+      router.resolve('/cloudmold/procurement-center/incoming-quality').name,
+    ).toBe('CloudMoldProcurementQuality');
+  });
+
+  it('separates query route authority from warehouse and quality commands', () => {
+    const routeText = JSON.stringify(root, (_key, value) =>
+      typeof value === 'function' ? '[component]' : value,
+    );
+    expect(routeText).not.toContain('cloudmold:warehouse:command');
+    expect(routeText).not.toContain(
+      'cloudmold:quality:procurement-receipt-inspection:command',
+    );
+  });
+
+  it('does not create ERP aliases or fallback redirects for procurement and finance', () => {
+    const routeText = JSON.stringify(root, (_key, value) =>
+      typeof value === 'function' ? '[component]' : value,
+    );
+
+    expect(routeText).not.toContain('/erp');
+    expect(routeText).not.toContain('ERP');
   });
 
   it('hides default-off Agent Control while preserving direct diagnostics', () => {
@@ -86,58 +200,12 @@ describe('cloudmold administration navigation', () => {
     expect(route?.meta?.authority).toEqual(['cloudmold:agent-control:query']);
   });
 
-  it('redirects old bookmarks to the grouped routes', () => {
-    expect(childByName(root, 'CloudMoldLegacyCatalogRedirect')?.redirect).toBe(
-      '/cloudmold/product-center/products',
+  it('physically retires CloudMold legacy route aliases', () => {
+    const routeText = JSON.stringify(root, (_key, value) =>
+      typeof value === 'function' ? '[component]' : value,
     );
-    expect(childByName(root, 'CloudMoldLegacyOrderRedirect')?.redirect).toBe(
-      '/cloudmold/order-fulfillment/orders',
-    );
-    expect(
-      childByName(root, 'CloudMoldLegacyDataReadinessRedirect')?.redirect,
-    ).toBe('/cloudmold/data-operations/health');
-  });
-
-  it('keeps old business entry aliases hidden and without direct authority', () => {
-    const legacyAliases = [
-      'CloudMoldLegacyCatalogRedirect',
-      'CloudMoldLegacyListingRedirect',
-      'CloudMoldLegacyMerchantRedirect',
-      'CloudMoldLegacyIdentityRedirect',
-      'CloudMoldLegacyInventoryRedirect',
-      'CloudMoldLegacyWarehouseRedirect',
-      'CloudMoldLegacyStockTransferRedirect',
-      'CloudMoldLegacyOrderRedirect',
-      'CloudMoldLegacyPaymentRedirect',
-      'CloudMoldLegacyFulfillmentRedirect',
-      'CloudMoldLegacyAfterSaleRedirect',
-      'CloudMoldLegacyDataReadinessRedirect',
-    ] as const;
-
-    legacyAliases.forEach((name) => {
-      const route = childByName(root, name);
-      expect(route).toBeTruthy();
-      expect(route?.meta?.hideInMenu).toBe(true);
-      expect(route?.meta?.authority).toBeFalsy();
-    });
-  });
-
-  it('keeps Product/Trade/ERP/WMS style legacy roots out of CloudMold menus', () => {
-    const hiddenLegacyRoots = [
-      'CloudMoldLegacyCatalogRedirect',
-      'CloudMoldLegacyInventoryRedirect',
-      'CloudMoldLegacyOrderRedirect',
-      'CloudMoldLegacyPaymentRedirect',
-      'CloudMoldLegacyFulfillmentRedirect',
-      'CloudMoldLegacyAfterSaleRedirect',
-      'CloudMoldLegacyDataReadinessRedirect',
-    ] as const;
-
-    hiddenLegacyRoots.forEach((name) => {
-      const route = childByName(root, name);
-      expect(route?.meta?.title).toBeDefined();
-      expect(route?.redirect).toContain('/cloudmold/');
-    });
+    expect(routeText).not.toContain('CloudMoldLegacy');
+    expect(root.children?.some((route) => route.redirect)).toBe(false);
   });
 
   it('keeps upstream Mall Product/Promotion/Trade routes disabled by default', () => {
@@ -153,13 +221,13 @@ describe('cloudmold administration navigation', () => {
       (route) => route.component && route.meta?.hideInMenu,
     ).length;
 
-    expect(groupedPageCount).toBe(12);
+    expect(groupedPageCount).toBe(18);
     expect(directOperationsPageCount).toBe(14);
     expect(operationsRoot.meta?.hideInMenu).toBe(true);
     expect(hiddenDirectPageCount).toBe(4);
     expect(
       groupedPageCount! + directOperationsPageCount! + hiddenDirectPageCount!,
-    ).toBe(30);
+    ).toBe(36);
   });
 
   it('registers L3 diagnostics as stable routes outside backend menus', () => {
