@@ -18,6 +18,7 @@ import {
   Descriptions,
   Drawer,
   Empty,
+  Input,
   message,
   Modal,
   Progress,
@@ -42,9 +43,11 @@ import {
   getPurchaseRequisitionPage,
   getQuotationPage,
   getSourcingEventPage,
+  releaseAwardPurchaseOrders,
 } from '#/api/cloudmold/procurement';
 
 import {
+  canReleaseAwardToPurchaseOrders,
   formatMinorMoney,
   procurementActions,
   procurementRowId,
@@ -60,6 +63,7 @@ const rows = ref<ProcurementRow[]>([]);
 const loading = ref(false);
 const loadError = ref('');
 const commandBusyId = ref('');
+const keyword = ref('');
 const status = ref<string>();
 const pageNo = ref(1);
 const pageSize = ref(20);
@@ -70,12 +74,21 @@ const detail = ref<CloudMoldProcurementApi.PurchaseOrderDetail>();
 const awardOpen = ref(false);
 const awardLoading = ref(false);
 const awardDetail = ref<CloudMoldProcurementApi.AwardDetail>();
+const releaseOpen = ref(false);
+const releaseSubmitting = ref(false);
+const releaseResult =
+  ref<CloudMoldProcurementApi.ReleasePurchaseOrdersResult>();
 const commandOpen = ref(false);
 const commandReasonCode = ref('');
 const pendingCommand = ref<{
   action: ProcurementAction;
   row: ProcurementRow;
 }>();
+const releaseCandidate = computed(() =>
+  awardDetail.value && canReleaseAwardToPurchaseOrders(awardDetail.value)
+    ? awardDetail.value
+    : undefined,
+);
 
 const workspaces: Array<{
   key: CloudMoldProcurementApi.ProcurementWorkspace;
@@ -171,6 +184,7 @@ async function loadPage() {
   const params = {
     pageNo: pageNo.value,
     pageSize: pageSize.value,
+    keyword: keyword.value.trim() || undefined,
     status: status.value,
   };
   try {
@@ -200,6 +214,7 @@ function search() {
 }
 
 function reset() {
+  keyword.value = '';
   status.value = undefined;
   pageNo.value = 1;
   void loadPage();
@@ -293,9 +308,7 @@ async function submitCommand() {
   }
 }
 
-async function openOrder(row: ProcurementRow) {
-  if (workspace.value !== 'PURCHASE_ORDER') return;
-  const orderId = procurementRowId(workspace.value, row);
+async function openOrderById(orderId: string) {
   detailOpen.value = true;
   detailLoading.value = true;
   detail.value = undefined;
@@ -310,10 +323,18 @@ async function openOrder(row: ProcurementRow) {
   }
 }
 
+async function openOrder(row: ProcurementRow) {
+  if (workspace.value !== 'PURCHASE_ORDER') return;
+  await openOrderById(procurementRowId(workspace.value, row));
+}
+
 async function openAwardById(awardId: string) {
   awardOpen.value = true;
   awardLoading.value = true;
   awardDetail.value = undefined;
+  if (releaseResult.value?.awardId !== awardId) {
+    releaseResult.value = undefined;
+  }
   try {
     awardDetail.value = await getPurchaseAward(awardId);
   } catch (error) {
@@ -326,6 +347,36 @@ async function openAwardById(awardId: string) {
 async function openAward(row: ProcurementRow) {
   if (workspace.value !== 'AWARD') return;
   await openAwardById(procurementRowId(workspace.value, row));
+}
+
+function openReleaseConfirm() {
+  if (!releaseCandidate.value) return;
+  releaseOpen.value = true;
+}
+
+async function submitAwardRelease() {
+  const candidate = releaseCandidate.value;
+  if (!candidate) return;
+  releaseSubmitting.value = true;
+  try {
+    const result = await releaseAwardPurchaseOrders(candidate.awardId, {
+      expectedAwardVersion: candidate.aggregateVersion,
+    });
+    releaseResult.value = result;
+    message[result.duplicate ? 'warning' : 'success'](
+      result.duplicate
+        ? '采购订单已存在，已返回当前批准快照生成结果'
+        : `已基于批准快照生成 ${result.purchaseOrders.length} 张采购订单`,
+    );
+    releaseOpen.value = false;
+    await Promise.all([loadPage(), openAwardById(candidate.awardId)]);
+  } catch (error) {
+    message.error(
+      `发布采购订单失败：${error instanceof Error ? error.message : '服务未完成该命令'}`,
+    );
+  } finally {
+    releaseSubmitting.value = false;
+  }
 }
 
 function documentTitle(row: ProcurementRow) {
@@ -390,12 +441,12 @@ onMounted(async () => {
 
 <template>
   <Page
-    description="以多行询价、不可变报价版本与拆分定标形成可审计采购来源，并发布规范采购订单。"
+    description="以多行询价、不可变报价版本与拆分定标形成可审计采购来源，并基于批准快照发布规范采购订单。"
     title="寻源与定标"
   >
     <Alert
       class="mb-4"
-      description="所有动作直达 CloudMold Procurement 权威聚合；请求失败、版本冲突和权限拒绝都会显式提示并保留审计线索。"
+      description="所有动作直达 CloudMold Procurement 权威聚合；Award → PO 只允许基于批准快照由服务端生成，前端不会猜测主体、税率、估值或交付计划。"
       message="CloudMold 采购权威"
       show-icon
       type="info"
@@ -428,6 +479,13 @@ onMounted(async () => {
       <Tabs v-model:active-key="workspace" :items="workspaces" />
       <div class="toolbar">
         <Space wrap>
+          <Input
+            v-model:value="keyword"
+            allow-clear
+            placeholder="单据编号、供应商、SKU 或来源编号"
+            style="width: 300px"
+            @press-enter="search"
+          />
           <Select
             v-if="statusOptions.length"
             v-model:value="status"
@@ -570,6 +628,23 @@ onMounted(async () => {
             ? '原因码（必填，例如 SUPPLIER_DECLINED）'
             : '原因码（可选）'
         "
+      />
+    </Modal>
+
+    <Modal
+      v-model:open="releaseOpen"
+      :confirm-loading="releaseSubmitting"
+      ok-text="基于批准快照发布采购订单"
+      title="确认发布采购订单"
+      @ok="submitAwardRelease"
+    >
+      <Alert
+        v-if="releaseCandidate"
+        class="mb-4"
+        :message="`将基于 ${releaseCandidate.awardCode} 的批准快照 V${releaseCandidate.aggregateVersion} 生成采购订单。`"
+        description="法律主体、税率、估值策略、成本与交付计划全部由服务端快照权威决定，管理端不会提交任何推断字段。"
+        show-icon
+        type="warning"
       />
     </Modal>
 
@@ -785,6 +860,7 @@ onMounted(async () => {
             <Card class="audit-card" title="定标证据与审批">
               <p>定标聚合 {{ awardDetail.awardId }}</p>
               <p>审批提交 {{ awardDetail.submittedAt ?? '尚未提交' }}</p>
+              <p>已生成采购订单 {{ awardDetail.purchaseOrderCount }} 张</p>
               <Space wrap>
                 <Tag color="blue">来源快照冻结</Tag>
                 <Tag color="green">幂等已校验</Tag>
@@ -866,11 +942,77 @@ onMounted(async () => {
               />
               <Alert
                 class="mt-4"
-                description="采购订单通过 CREATE_PURCHASE_ORDER 建立，并冻结中选供应商、币种、定标版本与逐行来源。"
+                description="只有批准且尚未生成采购订单的定标快照才能触发正式发布；采购订单头、行和交期全部由服务端快照权威生成。"
                 message="生成边界"
                 show-icon
                 type="info"
               />
+              <Button
+                v-if="releaseCandidate"
+                class="mt-4 w-full"
+                type="primary"
+                v-access:code="['cloudmold:procurement:award:release']"
+                @click="openReleaseConfirm"
+              >
+                基于批准快照发布采购订单
+              </Button>
+              <Alert
+                v-else-if="
+                  awardDetail.status === 'APPROVED' &&
+                  awardDetail.purchaseOrderCount > 0
+                "
+                class="mt-4"
+                description="该批准快照已经生成采购订单，不允许重复猜测或补写。"
+                message="快照已收口"
+                show-icon
+                type="success"
+              />
+              <template v-if="releaseResult">
+                <Card
+                  class="mt-4 release-result-card"
+                  size="small"
+                  title="最近一次发布结果"
+                >
+                  <div class="release-result-meta">
+                    <div>操作 {{ releaseResult.operationId }}</div>
+                    <div>定标版本 V{{ releaseResult.awardVersion }}</div>
+                    <div>状态 {{ releaseResult.status }}</div>
+                    <Tag
+                      :color="releaseResult.duplicate ? 'warning' : 'success'"
+                    >
+                      {{ releaseResult.duplicate ? '幂等重复' : '新生成' }}
+                    </Tag>
+                  </div>
+                  <div
+                    v-for="purchaseOrder in releaseResult.purchaseOrders"
+                    :key="purchaseOrder.orderId"
+                    class="release-order"
+                  >
+                    <Button
+                      class="document-link"
+                      type="link"
+                      @click="openOrderById(purchaseOrder.orderId)"
+                    >
+                      {{ purchaseOrder.orderCode }}
+                    </Button>
+                    <div>{{ purchaseOrder.supplierId }}</div>
+                    <div class="document-subtitle">
+                      {{ purchaseOrder.lineCount }} 行 ·
+                      {{
+                        formatMinorMoney(
+                          purchaseOrder.grossAmountMinor,
+                          purchaseOrder.currencyCode,
+                        )
+                      }}
+                    </div>
+                    <Tag
+                      :color="procurementStatusMeta(purchaseOrder.status).color"
+                    >
+                      {{ procurementStatusMeta(purchaseOrder.status).label }}
+                    </Tag>
+                  </div>
+                </Card>
+              </template>
             </Card>
           </Col>
         </Row>
@@ -967,6 +1109,25 @@ onMounted(async () => {
 
 .schedule-line + .schedule-line {
   margin-top: 6px;
+}
+
+.release-result-card {
+  border-radius: 12px;
+}
+
+.release-result-meta {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.release-order {
+  padding: 12px 0;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.release-order:first-of-type {
+  border-top: 0;
 }
 
 @media (max-width: 768px) {

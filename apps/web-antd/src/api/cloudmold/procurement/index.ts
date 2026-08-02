@@ -16,6 +16,7 @@ export namespace CloudMoldProcurementApi {
     | 'RFQ';
 
   export interface PageParams extends PageParam {
+    keyword?: string;
     status?: string;
   }
 
@@ -138,6 +139,17 @@ export namespace CloudMoldProcurementApi {
     submittedAt?: string;
   }
 
+  export interface ReleasedPurchaseOrderSummary {
+    aggregateVersion: number;
+    currencyCode: string;
+    grossAmountMinor: Int64String;
+    lineCount: number;
+    orderCode: string;
+    orderId: string;
+    status: string;
+    supplierId: string;
+  }
+
   export interface PurchaseOrderPageItem {
     aggregateVersion: number;
     awardCode?: string;
@@ -227,12 +239,22 @@ export namespace CloudMoldProcurementApi {
     status: string;
   }
 
+  export interface ReleasePurchaseOrdersCommand {
+    expectedAwardVersion: number;
+  }
+
+  export interface ReleasePurchaseOrdersResult {
+    awardId: string;
+    awardVersion: number;
+    duplicate: boolean;
+    operationId: Int64String;
+    purchaseOrders: ReleasedPurchaseOrderSummary[];
+    status: string;
+  }
+
   export type PurchaseOrderOperation =
     (typeof PURCHASE_ORDER_OPERATIONS)[number];
-  export type PurchaseOrderTransitionOperation = Exclude<
-    PurchaseOrderOperation,
-    'CREATE_PURCHASE_ORDER'
-  >;
+  export type PurchaseOrderTransitionOperation = PurchaseOrderOperation;
   export type SourcingOperation = (typeof SOURCING_OPERATIONS)[number];
   export type SourcingEventTransitionOperation =
     | 'CANCEL_SOURCING_EVENT'
@@ -277,7 +299,6 @@ export namespace CloudMoldProcurementApi {
 const ROOT = '/cloudmold/procurement';
 
 export const PURCHASE_ORDER_OPERATIONS = [
-  'CREATE_PURCHASE_ORDER',
   'SUBMIT_PURCHASE_ORDER',
   'APPROVE_PURCHASE_ORDER',
   'RELEASE_PURCHASE_ORDER',
@@ -372,5 +393,19 @@ export function executeSourcingTransition(
   return requestClient.post<CloudMoldProcurementApi.CommandResult>(
     `${ROOT}/sourcing/command`,
     { ...buildCommandEnvelopeWithRunId(), ...command },
+  );
+}
+
+export function releaseAwardPurchaseOrders(
+  awardId: string,
+  command: CloudMoldProcurementApi.ReleasePurchaseOrdersCommand,
+) {
+  return requestClient.post<CloudMoldProcurementApi.ReleasePurchaseOrdersResult>(
+    `${ROOT}/awards/${encodeURIComponent(awardId)}/release-purchase-orders`,
+    {
+      ...buildCommandEnvelopeWithRunId(),
+      causationId: crypto.randomUUID(),
+      ...command,
+    },
   );
 }

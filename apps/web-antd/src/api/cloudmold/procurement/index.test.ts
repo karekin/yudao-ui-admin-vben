@@ -13,6 +13,7 @@ import {
   getQuotationPage,
   getSourcingEventPage,
   PURCHASE_ORDER_OPERATIONS,
+  releaseAwardPurchaseOrders,
   SOURCING_OPERATIONS,
 } from './index';
 
@@ -42,7 +43,7 @@ describe('cloudmold procurement api', () => {
   });
 
   it('forwards only authoritative pagination params to every page query', async () => {
-    const params = { pageNo: 2, pageSize: 10 };
+    const params = { keyword: 'PO-2026 supplier-a', pageNo: 2, pageSize: 10 };
     await getPurchaseRequisitionPage(params);
     await getSourcingEventPage(params);
     await getQuotationPage(params);
@@ -141,9 +142,31 @@ describe('cloudmold procurement api', () => {
     );
   });
 
+  it('releases purchase orders from the approved award snapshot only', async () => {
+    await releaseAwardPurchaseOrders('award/1', {
+      expectedAwardVersion: 6,
+    });
+    expect(requestClient.post).toHaveBeenCalledWith(
+      '/cloudmold/procurement/awards/award%2F1/release-purchase-orders',
+      expect.objectContaining({
+        causationId: expect.any(String),
+        correlationId: expect.any(String),
+        expectedAwardVersion: 6,
+        idempotencyKey: expect.any(String),
+        occurredAt: expect.any(String),
+        runId: expect.any(String),
+      }),
+    );
+    expect(requestClient.post).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        legalEntityId: expect.anything(),
+      }),
+    );
+  });
+
   it('exposes exactly the final backend operation vocabularies', () => {
     expect(PURCHASE_ORDER_OPERATIONS).toEqual([
-      'CREATE_PURCHASE_ORDER',
       'SUBMIT_PURCHASE_ORDER',
       'APPROVE_PURCHASE_ORDER',
       'RELEASE_PURCHASE_ORDER',

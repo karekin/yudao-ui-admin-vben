@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatMinorMoney, procurementActions } from './presentation';
+import {
+  canReleaseAwardToPurchaseOrders,
+  formatMinorMoney,
+  procurementActions,
+} from './presentation';
 
 describe('procurement presentation', () => {
   it('exposes only legal final-state actions', () => {
@@ -45,6 +49,27 @@ describe('procurement presentation', () => {
     expect(procurementActions('PURCHASE_ORDER', 'DRAFT')[1]?.operation).toBe(
       'CANCEL_PURCHASE_ORDER',
     );
+  });
+
+  it('allows award release only for approved snapshots without purchase orders', () => {
+    expect(
+      canReleaseAwardToPurchaseOrders({
+        purchaseOrderCount: 0,
+        status: 'APPROVED',
+      }),
+    ).toBe(true);
+    expect(
+      canReleaseAwardToPurchaseOrders({
+        purchaseOrderCount: 1,
+        status: 'APPROVED',
+      }),
+    ).toBe(false);
+    expect(
+      canReleaseAwardToPurchaseOrders({
+        purchaseOrderCount: 0,
+        status: 'SUBMITTED',
+      }),
+    ).toBe(false);
   });
 
   it('formats minor-unit money without changing authority', () => {

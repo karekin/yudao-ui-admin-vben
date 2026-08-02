@@ -243,6 +243,15 @@ export function procurementActions(
   return actionMatrix[workspace][status] ?? [];
 }
 
+export function canReleaseAwardToPurchaseOrders(
+  award: Pick<
+    CloudMoldProcurementApi.AwardPageItem,
+    'purchaseOrderCount' | 'status'
+  >,
+) {
+  return award.status === 'APPROVED' && award.purchaseOrderCount === 0;
+}
+
 export function formatMinorMoney(
   amountMinor: Int64String,
   currencyCode: string,
