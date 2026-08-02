@@ -39,6 +39,38 @@ export namespace CloudMoldMerchantApi {
     merchantId?: string;
     status?: string;
   }
+
+  export interface ManagedAdmissionArtifact {
+    id: string;
+    label: string;
+    status: string;
+    type: string;
+    version?: number;
+  }
+
+  /** 托管商家准入、验厂及成长评审的只读业务事实。 */
+  export interface ManagedAdmissionWorkflow {
+    actionRequired: boolean;
+    aggregateVersion: number;
+    artifacts: ManagedAdmissionArtifact[];
+    blockers: string[];
+    buyerAssignmentStatus?: string;
+    buyerPrincipalId?: string;
+    buyerTlPrincipalId?: string;
+    exitDecisionStatus?: string;
+    exitReasonType?: string;
+    gradeCode?: string;
+    gradeDecisionStatus?: string;
+    invitationStatus?: string;
+    nextActions: string[];
+    phase: string;
+    probationAssessmentStatus?: string;
+    scorecardMonth?: string;
+    scorecardStatus?: string;
+    status: 'FAILED' | 'PREPARE' | 'RUNNING' | 'SUCCEEDED' | 'WAITING';
+    summary: string;
+    terminal: boolean;
+  }
 }
 
 export function getCloudMoldMerchantPage(
@@ -56,5 +88,14 @@ export function getCloudMoldMerchantShopPage(
   return requestClient.get<PageResult<CloudMoldMerchantApi.Shop>>(
     '/cloudmold/merchant/shops/page',
     { params },
+  );
+}
+
+export function getCloudMoldManagedAdmissionWorkflowByMerchant(
+  merchantId: string,
+) {
+  return requestClient.get<CloudMoldMerchantApi.ManagedAdmissionWorkflow>(
+    '/cloudmold/merchant/managed-admission/workflow-by-merchant',
+    { params: { merchantId } },
   );
 }

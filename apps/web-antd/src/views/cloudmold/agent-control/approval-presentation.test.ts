@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  approvalActionLabel,
   buildApprovalDecisionPresentation,
   buildApprovalPresentation,
   buildGenericApprovalPresentation,
@@ -89,12 +90,12 @@ describe('buildApprovalPresentation', () => {
       riskLevel: 'R3',
       roleCode: 'bonded-customs-operations',
       status: 'PENDING',
-      title: '保税仓关务闭环',
+      title: 'Temporal 定时托管：skill.cloudmold.crossborder.bonded-customs-lifecycle.v1',
       workOrderId: 'wo-3',
     });
 
     expect(result).toMatchObject({
-      actionTitle: '保税仓关务闭环',
+      actionTitle: '保税仓关务处置',
       operationCount: 2,
       operationNames: ['CREATE_CASE', 'SUBMIT_DECLARATION'],
     });
@@ -123,6 +124,21 @@ describe('buildApprovalPresentation', () => {
       outputs: expect.arrayContaining(['申报或处置记录']),
       riskReason: expect.stringContaining('合规风险'),
     });
+  });
+
+  it('uses business language for a scheduled replenishment workflow', () => {
+    expect(
+      buildApprovalDecisionPresentation({
+        actionCode: 'TEMPORAL_SCHEDULED_WRITE',
+        riskLevel: 'R3',
+        roleCode: 'supply-planning',
+        skillId: 'skill.cloudmold.supply.replenishment-lifecycle.v1',
+        title: 'Temporal 定时托管',
+      })?.title,
+    ).toBe('库存补货计划闭环');
+    expect(approvalActionLabel('TEMPORAL_SCHEDULED_WRITE')).toBe(
+      '定时任务受控写入',
+    );
   });
 
   it('keeps the fallback risk explanation actionable', () => {

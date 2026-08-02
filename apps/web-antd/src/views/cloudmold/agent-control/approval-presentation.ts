@@ -66,6 +66,14 @@ type ApprovalDecisionSource = Pick<
 
 const workflowProfiles = [
   {
+    match: /supply\.replenishment|replenishment-lifecycle/,
+    objective: '核对补货计划、库存约束和建议范围后，推进受控的库存回补动作。',
+    outputs: ['补货计划或建议单', '库存回读与处置结果', '可追溯的运营审计记录'],
+    riskReason:
+      '会影响库存供给、采购或调拨决策；必须确认需求、库存和受影响对象均在冻结范围内后才能放行。',
+    title: '库存补货计划闭环',
+  },
+  {
     match: /bonded-customs|bonded-customs-operations/,
     objective: '核对保税仓关务事项，并按已冻结的单据范围推进申报或处置。',
     outputs: ['关务案件与处理结论', '申报或处置记录', '可追溯的合规审计证据'],
@@ -114,6 +122,16 @@ const workflowProfiles = [
     title: '类目运营治理',
   },
 ] as const;
+
+const approvalActionLabels: Record<string, string> = {
+  TEMPORAL_SCHEDULED_WRITE: '定时任务受控写入',
+};
+
+/** Turns technical action codes into language an approver can act on. */
+export function approvalActionLabel(actionCode?: string) {
+  if (!actionCode) return '受控业务操作';
+  return approvalActionLabels[actionCode.trim().toUpperCase()] ?? '受控业务操作';
+}
 
 const unique = (values: Array<string | undefined>) => [
   ...new Set(
@@ -198,6 +216,7 @@ export function buildGenericApprovalPresentation(
         key !== 'definitions' &&
         key !== 'lifecycle' &&
         !isSensitiveKey(key) &&
+        !isTechnicalReferenceKey(key) &&
         isDisplayable(value),
     )
     .slice(0, 6)
@@ -212,7 +231,10 @@ export function buildGenericApprovalPresentation(
       : '已冻结本次业务输入与影响范围';
 
   return {
-    actionTitle: detail.title || '已冻结的高风险业务动作',
+    actionTitle:
+      buildApprovalDecisionPresentation(detail)?.title ||
+      detail.title ||
+      '已冻结的高风险业务动作',
     entries,
     operationCount,
     operationNames,
@@ -276,6 +298,10 @@ function isSensitiveKey(key: string): boolean {
   return /(credential|idempotency|lease.*token|password|secret|token|run.?id|operator|principal)/i.test(
     key,
   );
+}
+
+function isTechnicalReferenceKey(key: string): boolean {
+  return /^(skill|workflow)(id|name|version)?$/i.test(key);
 }
 
 function humanizeKey(value: string): string {

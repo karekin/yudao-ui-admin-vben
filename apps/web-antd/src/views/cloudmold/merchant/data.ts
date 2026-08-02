@@ -91,7 +91,7 @@ export function useMerchantColumns(): VxeTableGridOptions['columns'] {
     {
       field: 'action',
       fixed: 'right',
-      minWidth: 120,
+      minWidth: 190,
       slots: { default: 'merchant-action' },
       title: '操作',
     },

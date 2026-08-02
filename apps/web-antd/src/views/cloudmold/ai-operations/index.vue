@@ -20,6 +20,7 @@ import { useRoute } from 'vue-router';
 import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
 import { useUserStore } from '@vben/stores';
+import { renderSkillMarkdown } from './skill-markdown';
 
 import {
   Alert,
@@ -200,15 +201,9 @@ const aiOperationsTabs = [
   },
   {
     key: 'runs',
-    title: '托管运行实例',
-    description: '将异常、待复核与 SLA 风险收敛到同一处置视图。',
-    label: '运行实例',
-  },
-  {
-    key: 'artifacts',
-    title: '业务结果与终态',
-    description: '以业务结果而非运行次数判断 Agent 是否完成经营闭环。',
-    label: '运行产物',
+    title: '运行记录与业务结果',
+    description: '逐次查看 Agent 实际完成的业务闭环、交付数据与执行进度。',
+    label: '运行记录',
   },
   {
     key: 'observations-approval',
@@ -237,14 +232,6 @@ const managedRunFlags = ref<SectionFlags>({
   loadFailed: false,
   unavailable: false,
 });
-const managedArtifactFlags = ref<SectionFlags>({
-  loadFailed: false,
-  unavailable: false,
-});
-const managedObservationFlags = ref<SectionFlags>({
-  loadFailed: false,
-  unavailable: false,
-});
 const temporalScheduleFlags = ref<SectionFlags>({
   loadFailed: false,
   unavailable: false,
@@ -263,6 +250,7 @@ const temporalBlockWorkspace = ref<null | {
   temporalWorkflowId?: string;
 }>(null);
 const managedWorkflowNames = ref<Record<string, string>>({});
+const managedWorkflowOwnerRoles = ref<Record<string, string>>({});
 const roleCapabilityEntries = ref<RoleCapabilityEntry[]>([]);
 const jobCapabilityCatalog =
   ref<CloudMoldAiOperationsApi.BusinessSkillCatalog>();
@@ -301,6 +289,13 @@ let skillContentRequestSequence = 0;
 function workflowName(skillId?: string) {
   if (!skillId) return '未识别工作流';
   return managedWorkflowNames.value[skillId] ?? skillId;
+}
+
+function workflowOwnerRole(skillId?: string) {
+  const ownerRole = skillId
+    ? managedWorkflowOwnerRoles.value[skillId]
+    : undefined;
+  return ownerRole ? managedWorkflowOwnerRoleLabel(ownerRole) : '按工作流定义';
 }
 
 function openWorkflowDetail(
@@ -380,6 +375,9 @@ async function loadRoleCapabilities() {
     );
     managedWorkflowNames.value = Object.fromEntries(
       workflows.map((item) => [item.skillId, item.displayName]),
+    );
+    managedWorkflowOwnerRoles.value = Object.fromEntries(
+      workflows.map((item) => [item.skillId, item.ownerRole ?? '']),
     );
   } catch (error) {
     roleCapabilityEntries.value = [];
@@ -577,6 +575,90 @@ function collectBusinessObjects(
   return [...map.values()];
 }
 
+const businessObjectCategoryLabels: Record<string, string> = {
+  AFTERSALE: '售后服务',
+  CAMPAIGN: '营销活动',
+  CROSSBORDER_CASE: '跨境履约',
+  FULFILLMENT: '履约配送',
+  FULFILLMENT_EXCEPTION: '履约异常处置',
+  INVENTORY: '库存记录',
+  LISTING: '商品刊登',
+  MES_PRODUCT_PRODUCE: '产成品入库',
+  MES_PRODUCTION_FEEDBACK: '生产报工',
+  MES_PRODUCTION_TASK: '生产任务',
+  MES_WORK_ORDER: '生产工单',
+  MERCHANT: '商家资料',
+  NOTIFICATION_CAMPAIGN: '营销活动',
+  NOTIFICATION_DELIVERY: '营销触达',
+  ORDER: '交易订单',
+  PARTNER_MARKETING_CASE: '合作投放',
+  PAYMENT: '支付记录',
+  PROCUREMENT_ORDER: '补货采购单',
+  PRODUCT: '商品资料',
+  SETTLEMENT: '合作结算',
+  SHOP: '店铺资料',
+  SKU: '商品 SKU',
+  SUPPLIER_SOURCING: '供应商寻源单',
+  SPU: '商品款式',
+  WAREHOUSE: '仓库资料',
+  WAREHOUSE_MOVEMENT: '仓间调拨单',
+  WAREHOUSE_RECEIPT: '采购收货单',
+  WAREHOUSE_SHIPMENT: '销售出库单',
+};
+
+const businessObjectStatusLabels: Record<string, string> = {
+  ACTIVE: '已生效',
+  APPROVED: '已批准',
+  CANCELLED: '已取消',
+  CLAIMED: '已认领',
+  CLOSED: '已结案',
+  COMPLETED: '已完成',
+  CONFIRMED: '已确认',
+  CREATED: '已创建',
+  DELIVERED: '已送达',
+  PAID: '已支付',
+  NOTICED: '已通知',
+  OPEN: '已创建',
+  PUBLISHED: '已发布',
+  REFUNDED: '已退款',
+  RESOLVED: '已解决',
+  RETURNED: '已退货',
+  RUNNING: '进行中',
+  SHIPPED: '已发货',
+  SUCCEEDED: '已完成',
+};
+
+function businessObjectCategory(
+  object: CloudMoldAiOperationsApi.ManagedBusinessObject,
+) {
+  return businessObjectCategoryLabels[object.objectType] ?? '业务数据';
+}
+
+function businessObjectReference(
+  object: CloudMoldAiOperationsApi.ManagedBusinessObject,
+) {
+  return object.businessCode || '已写入或确认，业务编号暂未提供';
+}
+
+function businessObjectStatus(
+  object: CloudMoldAiOperationsApi.ManagedBusinessObject,
+) {
+  if (!object.status) {
+    return { color: 'default', label: '已记录' };
+  }
+  return {
+    color: 'success',
+    label: businessObjectStatusLabels[object.status] ?? '已记录',
+  };
+}
+
+function businessDeliveryTitle(
+  detail?: CloudMoldAiOperationsApi.ManagedRunDetail,
+) {
+  const count = collectBusinessObjects(detail).length;
+  return `本次交付物${count ? ` · ${count} 项` : ''}`;
+}
+
 function buildBusinessTimeline(
   detail?: CloudMoldAiOperationsApi.ManagedRunDetail,
 ) {
@@ -635,9 +717,7 @@ function buildApprovalResponsibility(
     },
     {
       label: '责任岗位',
-      value: approvalPhase?.phaseCode
-        ? roleName(approvalPhase.phaseCode) || approvalPhase.phaseCode
-        : '由托管工作流定义',
+      value: workflowOwnerRole(detail?.task.skillId),
     },
     {
       label: '当前进度',
@@ -712,86 +792,6 @@ function managedRunColumns(): VxeTableGridOptions['columns'] {
   ];
 }
 
-function managedArtifactColumns(): VxeTableGridOptions['columns'] {
-  return [
-    {
-      field: 'skillId',
-      fixed: 'left',
-      minWidth: 180,
-      slots: { default: 'managed-artifact-workflow' },
-      title: '工作流',
-    },
-    {
-      field: 'businessOutcome',
-      minWidth: 360,
-      slots: { default: 'managed-artifact-outcome' },
-      title: '业务结果',
-    },
-    {
-      field: 'status',
-      minWidth: 100,
-      slots: { default: 'managed-artifact-status' },
-      title: '状态',
-    },
-    {
-      field: 'completedAt',
-      minWidth: 180,
-      slots: { default: 'managed-artifact-completed' },
-      title: 'SLA / 完成时间',
-    },
-    {
-      field: 'action',
-      fixed: 'right',
-      minWidth: 72,
-      slots: { default: 'managed-artifact-action' },
-      title: '操作',
-    },
-  ];
-}
-
-function managedObservationColumns(): VxeTableGridOptions['columns'] {
-  return [
-    {
-      field: 'skillId',
-      fixed: 'left',
-      minWidth: 180,
-      slots: { default: 'managed-observation-workflow' },
-      title: '工作流',
-    },
-    {
-      field: 'businessOutcome',
-      minWidth: 320,
-      slots: { default: 'managed-observation-outcome' },
-      title: '业务结果',
-    },
-    {
-      field: 'status',
-      minWidth: 100,
-      slots: { default: 'managed-observation-status' },
-      title: '状态',
-    },
-    {
-      field: 'currentStepCode',
-      minWidth: 160,
-      slots: { default: 'managed-observation-current-step' },
-      title: '进度',
-    },
-    {
-      field: 'updatedAt',
-      minWidth: 180,
-      slots: { default: 'managed-observation-completed' },
-      title: 'SLA / 最近观测',
-    },
-    {
-      field: 'action',
-      fixed: 'right',
-      minWidth: 72,
-      slots: { default: 'managed-observation-action' },
-      title: '操作',
-    },
-  ];
-}
-
 const [ManagedWorkflowGrid, managedWorkflowGridApi] = useVbenVxeGrid({
   formOptions: {
     collapsed: true,
@@ -812,6 +812,9 @@ const [ManagedWorkflowGrid, managedWorkflowGridApi] = useVbenVxeGrid({
             );
             managedWorkflowNames.value = Object.fromEntries(
               items.map((item) => [item.skillId, item.displayName]),
+            );
+            managedWorkflowOwnerRoles.value = Object.fromEntries(
+              items.map((item) => [item.skillId, item.ownerRole ?? '']),
             );
             const filteredItems = items.filter((item) => {
               return (
@@ -863,70 +866,6 @@ const [ManagedRunGrid, managedRunGridApi] = useVbenVxeGrid({
             });
           } catch (error) {
             applyFailure(managedRunFlags.value, error);
-            return emptyPage(page.currentPage, page.pageSize);
-          }
-        },
-      },
-    },
-    rowConfig: { height: 58, isHover: true, keyField: 'taskId' },
-    toolbarConfig: { refresh: true, search: true },
-  } as VxeTableGridOptions<CloudMoldAiOperationsApi.ManagedRun>,
-});
-
-const [ManagedArtifactGrid, managedArtifactGridApi] = useVbenVxeGrid({
-  formOptions: {
-    collapsed: true,
-    collapsedRows: 1,
-    schema: useManagedRunFormSchema(),
-    showCollapseButton: true,
-  },
-  gridOptions: {
-    columns: managedArtifactColumns(),
-    height: 600,
-    proxyConfig: {
-      ajax: {
-        query: async ({ page }, formValues) => {
-          resetFlags(managedArtifactFlags.value);
-          try {
-            return await getCloudMoldManagedRunPage({
-              pageNo: page.currentPage,
-              pageSize: page.pageSize,
-              ...formValues,
-            });
-          } catch (error) {
-            applyFailure(managedArtifactFlags.value, error);
-            return emptyPage(page.currentPage, page.pageSize);
-          }
-        },
-      },
-    },
-    rowConfig: { height: 64, isHover: true, keyField: 'taskId' },
-    toolbarConfig: { refresh: true, search: true },
-  } as VxeTableGridOptions<CloudMoldAiOperationsApi.ManagedRun>,
-});
-
-const [ManagedObservationGrid, managedObservationGridApi] = useVbenVxeGrid({
-  formOptions: {
-    collapsed: true,
-    collapsedRows: 1,
-    schema: useManagedRunFormSchema(),
-    showCollapseButton: true,
-  },
-  gridOptions: {
-    columns: managedObservationColumns(),
-    height: 600,
-    proxyConfig: {
-      ajax: {
-        query: async ({ page }, formValues) => {
-          resetFlags(managedObservationFlags.value);
-          try {
-            return await getCloudMoldManagedRunPage({
-              pageNo: page.currentPage,
-              pageSize: page.pageSize,
-              ...formValues,
-            });
-          } catch (error) {
-            applyFailure(managedObservationFlags.value, error);
             return emptyPage(page.currentPage, page.pageSize);
           }
         },
@@ -1160,10 +1099,9 @@ function toggleApprovalGroup(key: string) {
     : [...expandedApprovalGroupKeys.value, key];
 }
 
-function scrollToManagedObservation() {
-  document
-    .querySelector('#managed-observation-detail')
-    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+function openRunRecords() {
+  activeTab.value = 'runs';
+  void managedRunGridApi.query();
 }
 
 function openApproval(item: CloudMoldAgentControlApi.BusinessCard) {
@@ -1262,6 +1200,9 @@ watch(activeTab, (tab) => {
   if (tab === 'managed-workflows') {
     managedWorkflowGridApi.query();
   }
+  if (tab === 'runs') {
+    managedRunGridApi.query();
+  }
   if (tab === 'observations-approval' && !cardsLoaded.value) {
     loadApprovalCards();
   }
@@ -1270,9 +1211,12 @@ watch(activeTab, (tab) => {
 async function applyWorkspaceLink() {
   const tab = route.query.tab;
   const requestedTab =
-    typeof tab === 'string' && aiOperationsTabs.some((item) => item.key === tab)
-      ? (tab as AiOperationsTab)
-      : undefined;
+    tab === 'artifacts'
+      ? 'runs'
+      : typeof tab === 'string' &&
+          aiOperationsTabs.some((item) => item.key === tab)
+        ? (tab as AiOperationsTab)
+        : undefined;
   if (requestedTab) {
     activeTab.value = requestedTab;
   }
@@ -1336,19 +1280,12 @@ watch(
 
 async function refreshActiveWorkspace() {
   switch (activeTab.value) {
-    case 'artifacts': {
-      await managedArtifactGridApi.query();
-      break;
-    }
     case 'managed-workflows': {
       await managedWorkflowGridApi.query();
       break;
     }
     case 'observations-approval': {
-      await Promise.all([
-        loadApprovalCards(),
-        managedObservationGridApi.query(),
-      ]);
+      await loadApprovalCards();
       break;
     }
     case 'role-capabilities': {
@@ -2031,21 +1968,21 @@ onMounted(() => {
         </div>
       </Tabs.TabPane>
 
-      <Tabs.TabPane key="runs" tab="运行实例">
+      <Tabs.TabPane key="runs" tab="运行记录">
         <div class="flex min-h-0 flex-col gap-4">
           <Alert
             v-if="temporalBlockWorkspace"
             type="warning"
             show-icon
-            message="此工作流正等待高风险审批，SkillTask 尚未启动"
+            message="此工作流正等待高风险审批，业务任务尚未启动"
             :description="`当前阻塞节点：审批门 / 高风险业务操作。Temporal 工作流 ${temporalBlockWorkspace.temporalWorkflowId || '-'}（运行 ${temporalBlockWorkspace.temporalRunId || '-'}）正在等待审批 ID ${temporalBlockWorkspace.approvalId || '-'}；审批通过后才会创建并进入 SkillTask 的第一个编排步骤。`"
           />
           <Alert
             v-if="managedRunFlags.unavailable"
             type="warning"
             show-icon
-            message="托管运行实例接口暂未接入"
-            description="运行实例页仍保留 AI 遥测视角；托管接口到位后将优先展示 SkillTask instance 事实。"
+            message="运行记录接口暂未接入"
+            description="接口接通后会优先展示每次运行完成的业务结果与交付数据。"
           />
           <Alert
             v-else-if="managedRunFlags.loadFailed"
@@ -2054,7 +1991,7 @@ onMounted(() => {
             message="托管运行实例加载失败"
             description="请检查后端服务与权限后重试。"
           />
-          <ManagedRunGrid table-title="托管运行实例">
+          <ManagedRunGrid table-title="运行记录与业务结果">
             <template #managed-run-workflow="{ row }">
               <div class="truncate" :title="row.skillId">
                 {{ workflowName(row.skillId) }}
@@ -2107,72 +2044,14 @@ onMounted(() => {
         </div>
       </Tabs.TabPane>
 
-      <Tabs.TabPane key="artifacts" tab="运行产物">
-        <div class="flex min-h-0 flex-col gap-4">
-          <Alert
-            v-if="managedArtifactFlags.unavailable"
-            type="warning"
-            show-icon
-            message="SkillTask 终态产物接口暂未接通"
-            description="托管产物展示脱敏后的业务结果；原始负载不直接返回。"
-          />
-          <Alert
-            v-else-if="managedArtifactFlags.loadFailed"
-            type="error"
-            show-icon
-            message="SkillTask 终态产物加载失败"
-            description="请检查 SkillTask 执行服务与跨服务读取链路后重试。"
-          />
-          <ManagedArtifactGrid table-title="Agent 业务产物">
-            <template #managed-artifact-workflow="{ row }">
-              <div class="truncate" :title="row.skillId">
-                {{ workflowName(row.skillId) }}
-              </div>
-            </template>
-            <template #managed-artifact-outcome="{ row }">
-              <div class="min-w-0 py-1">
-                <div class="truncate font-medium text-foreground">
-                  {{ row.businessOutcome?.headline || '业务结果生成中' }}
-                </div>
-                <div class="truncate text-xs text-muted-foreground">
-                  {{
-                    row.businessOutcome?.summary || '任务完成后生成业务结果摘要'
-                  }}
-                </div>
-              </div>
-            </template>
-            <template #managed-artifact-status="{ row }">
-              <StatusTag v-bind="getMeta(workflowRunStatusMeta, row.status)" />
-            </template>
-            <template #managed-artifact-completed="{ row }">
-              {{ runCompletionLabel(row) }}
-            </template>
-            <template #managed-artifact-action="{ row }">
-              <TableAction
-                :actions="[
-                  {
-                    label: '详情',
-                    onClick: () =>
-                      openRunDetail(
-                        row.taskId,
-                        'managed',
-                        workflowName(row.skillId),
-                      ),
-                    type: 'link',
-                  },
-                ]"
-              />
-            </template>
-          </ManagedArtifactGrid>
-        </div>
-      </Tabs.TabPane>
-
       <Tabs.TabPane key="observations-approval" tab="观测与审批">
         <section class="approval-workspace">
           <div class="approval-gate-note" aria-label="BPM 审批门禁说明">
             <StatusTag color="processing" label="BPM 审批门禁" />
-            <span>指定审批人 → 工作流程待办 → 人工办理 → 安全确认 → 自动恢复
-              Agent</span>
+            <span
+              >指定审批人 → 工作流程待办 → 人工办理 → 安全确认 → 自动恢复
+              Agent</span
+            >
             <span class="approval-gate-note-muted">
               已安全确认的记录会显示为“等待执行”，不会计入审批阻塞。
             </span>
@@ -2449,128 +2328,26 @@ onMounted(() => {
 
             <aside class="approval-observation-aside">
               <div>
-                <span class="approval-eyebrow">运行观测</span>
-                <h3>Agent 执行护栏</h3>
+                <span class="approval-eyebrow">运行记录</span>
+                <h3>成果与过程分开查看</h3>
                 <p>
-                  审批状态、当前步骤与重试情况在下方 SkillTask 明细中统一核查。
+                  审批页只处理风险和待办；逐次的业务结果、当前进度与重试情况集中在“运行记录”。
                 </p>
               </div>
-              <div
-                class="approval-observation-status"
-                :class="{
-                  'is-unavailable':
-                    managedObservationFlags.unavailable ||
-                    managedObservationFlags.loadFailed,
-                }"
-              >
+              <div class="approval-observation-status">
                 <span class="approval-observation-dot"></span>
                 <div>
-                  <strong>
-                    {{
-                      managedObservationFlags.unavailable ||
-                      managedObservationFlags.loadFailed
-                        ? '观测链路需要检查'
-                        : '观测链路已就绪'
-                    }}
-                  </strong>
-                  <p>
-                    {{
-                      managedObservationFlags.unavailable ||
-                      managedObservationFlags.loadFailed
-                        ? '请检查下方提示并恢复 SkillTask 运行观测接口。'
-                        : '支持按运行状态、工作流和时间范围快速检索。'
-                    }}
-                  </p>
+                  <strong>不再重复展示运行列表</strong>
+                  <p>每条运行的成果、交付物和异常记录只保留一个查看入口。</p>
                 </div>
               </div>
               <div class="approval-safety-rule">
                 <span>安全放行规则</span>
                 <p>仅在审批通过并完成安全确认后，Agent 才会恢复执行。</p>
               </div>
-              <Button block @click="scrollToManagedObservation">
-                打开运行明细
-              </Button>
+              <Button block @click="openRunRecords"> 查看运行记录 </Button>
             </aside>
           </div>
-
-          <section
-            id="managed-observation-detail"
-            class="approval-observation-detail"
-          >
-            <div class="approval-section-heading">
-              <div>
-                <span class="approval-eyebrow">SkillTask</span>
-                <h3>运行观测明细</h3>
-              </div>
-              <span class="approval-section-hint">状态、步骤与重试记录</span>
-            </div>
-            <Alert
-              v-if="managedObservationFlags.unavailable"
-              type="warning"
-              show-icon
-              message="SkillTask 运行观测接口暂未接通"
-              description="托管观测只展示状态、当前步骤、尝试次数和更新时间。"
-            />
-            <Alert
-              v-else-if="managedObservationFlags.loadFailed"
-              type="error"
-              show-icon
-              message="SkillTask 运行观测加载失败"
-              description="请检查 SkillTask 执行服务与跨服务读取链路后重试。"
-            />
-            <ManagedObservationGrid table-title="SkillTask 运行观测">
-              <template #managed-observation-workflow="{ row }">
-                <div class="truncate" :title="row.skillId">
-                  {{ workflowName(row.skillId) }}
-                </div>
-              </template>
-              <template #managed-observation-outcome="{ row }">
-                <div class="min-w-0 py-1">
-                  <div class="truncate font-medium text-foreground">
-                    {{ row.businessOutcome?.headline || '业务结果生成中' }}
-                  </div>
-                  <div class="truncate text-xs text-muted-foreground">
-                    {{
-                      row.businessOutcome?.summary || '等待业务阶段沉淀结果摘要'
-                    }}
-                  </div>
-                </div>
-              </template>
-              <template #managed-observation-current-step="{ row }">
-                <span class="truncate" :title="row.currentStepCode">
-                  {{
-                    row.status === 'SUCCEEDED'
-                      ? '全部阶段完成'
-                      : businessProgressLabel(row)
-                  }}
-                </span>
-              </template>
-              <template #managed-observation-status="{ row }">
-                <StatusTag
-                  v-bind="getMeta(workflowRunStatusMeta, row.status)"
-                />
-              </template>
-              <template #managed-observation-completed="{ row }">
-                {{ runCompletionLabel(row) }}
-              </template>
-              <template #managed-observation-action="{ row }">
-                <TableAction
-                  :actions="[
-                    {
-                      label: '详情',
-                      onClick: () =>
-                        openRunDetail(
-                          row.taskId,
-                          'managed',
-                          workflowName(row.skillId),
-                        ),
-                      type: 'link',
-                    },
-                  ]"
-                />
-              </template>
-            </ManagedObservationGrid>
-          </section>
         </section>
       </Tabs.TabPane>
     </Tabs>
@@ -2598,9 +2375,10 @@ onMounted(() => {
               {{ selectedSkillContent.content_sha256 }}
             </DescriptionsItem>
           </Descriptions>
-          <pre class="role-capability-skill-content">{{
-            selectedSkillContent.content
-          }}</pre>
+          <div
+            class="role-capability-skill-content"
+            v-dompurify-html="renderSkillMarkdown(selectedSkillContent.content)"
+          ></div>
         </template>
         <Empty
           v-else-if="!skillContentLoading"
@@ -2622,7 +2400,7 @@ onMounted(() => {
           :message="detailError"
         />
         <template v-else-if="detailData">
-          <Card size="small" title="业务结果">
+          <Card size="small" title="本次完成了什么">
             <Space direction="vertical" class="w-full" :size="8">
               <Typography.Title :level="5" class="mb-0">
                 {{ detailOutcomeHeadline(detailData) }}
@@ -2682,10 +2460,14 @@ onMounted(() => {
             </Descriptions>
           </Card>
 
-          <Card size="small" title="业务对象">
+          <Card size="small" :title="businessDeliveryTitle(detailData)">
+            <Typography.Paragraph class="mb-3 text-sm text-muted-foreground">
+              这里展示本次运行实际写入或确认的业务数据；业务编号可用于后续查询，内部
+              ID 与执行证据收在下方。
+            </Typography.Paragraph>
             <Empty
               v-if="!collectBusinessObjects(detailData).length"
-              description="当前尚未沉淀明确业务对象"
+              description="当前尚未产生可展示的业务数据"
             />
             <Descriptions v-else :column="1" bordered size="small">
               <DescriptionsItem
@@ -2694,14 +2476,14 @@ onMounted(() => {
                 :label="item.label"
               >
                 <Space wrap>
-                  <StatusTag color="default" :label="item.objectType" />
-                  <Typography.Text>
-                    {{ item.businessCode || item.businessId || '待生成编号' }}
-                  </Typography.Text>
                   <StatusTag
-                    v-if="item.status"
-                    v-bind="getMeta(workflowRunStatusMeta, item.status)"
+                    color="processing"
+                    :label="businessObjectCategory(item)"
                   />
+                  <Typography.Text type="secondary">
+                    {{ businessObjectReference(item) }}
+                  </Typography.Text>
+                  <StatusTag v-bind="businessObjectStatus(item)" />
                 </Space>
               </DescriptionsItem>
             </Descriptions>
@@ -2821,12 +2603,120 @@ onMounted(() => {
   padding: 16px;
   margin: 0;
   overflow: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.65;
-  white-space: pre-wrap;
   background: hsl(var(--muted) / 55%);
   border-radius: 10px;
+}
+
+.role-capability-skill-content :deep(h1),
+.role-capability-skill-content :deep(h2),
+.role-capability-skill-content :deep(h3),
+.role-capability-skill-content :deep(h4) {
+  margin: 1.2em 0 0.55em;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.role-capability-skill-content :deep(h1:first-child),
+.role-capability-skill-content :deep(pre:first-child) {
+  margin-top: 0;
+}
+
+.role-capability-skill-content :deep(h1) {
+  font-size: 20px;
+}
+
+.role-capability-skill-content :deep(h2) {
+  font-size: 17px;
+}
+
+.role-capability-skill-content :deep(h3) {
+  font-size: 15px;
+}
+
+.role-capability-skill-content :deep(p),
+.role-capability-skill-content :deep(li) {
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.role-capability-skill-content :deep(p) {
+  margin: 0.75em 0;
+}
+
+.role-capability-skill-content :deep(ul),
+.role-capability-skill-content :deep(ol) {
+  padding-left: 1.5em;
+  margin: 0.75em 0;
+}
+
+.role-capability-skill-content :deep(ul) {
+  list-style: disc;
+}
+
+.role-capability-skill-content :deep(ol) {
+  list-style: decimal;
+}
+
+.role-capability-skill-content :deep(ul ul) {
+  list-style: circle;
+}
+
+.role-capability-skill-content :deep(ol ol) {
+  list-style: lower-alpha;
+}
+
+.role-capability-skill-content :deep(a) {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+}
+
+.role-capability-skill-content :deep(code) {
+  padding: 0.12em 0.35em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+  background: hsl(var(--background));
+  border-radius: 4px;
+}
+
+.role-capability-skill-content :deep(pre) {
+  padding: 12px;
+  margin: 1em 0;
+  overflow: auto;
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+}
+
+.role-capability-skill-content :deep(pre code) {
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.65;
+  background: transparent;
+}
+
+.role-capability-skill-content :deep(blockquote) {
+  padding-left: 12px;
+  margin: 1em 0;
+  color: hsl(var(--muted-foreground));
+  border-left: 3px solid hsl(var(--primary) / 45%);
+}
+
+.role-capability-skill-content :deep(table) {
+  display: block;
+  max-width: 100%;
+  overflow: auto;
+  border-collapse: collapse;
+}
+
+.role-capability-skill-content :deep(th),
+.role-capability-skill-content :deep(td) {
+  padding: 8px 10px;
+  text-align: left;
+  border: 1px solid hsl(var(--border));
+}
+
+.role-capability-skill-content :deep(th) {
+  background: hsl(var(--background));
 }
 
 .ai-operations-command-bar {
@@ -2940,8 +2830,7 @@ onMounted(() => {
 
 .approval-funnel,
 .approval-queue,
-.approval-observation-aside,
-.approval-observation-detail {
+.approval-observation-aside {
   padding: 20px;
   background: hsl(var(--card));
   border: 1px solid hsl(var(--border));
@@ -3050,7 +2939,12 @@ onMounted(() => {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+}
+
+.approval-queue,
+.approval-observation-aside {
+  height: 100%;
 }
 
 .approval-filter {
@@ -3240,11 +3134,6 @@ onMounted(() => {
   border-radius: 12px;
 }
 
-.approval-observation-status.is-unavailable {
-  background: hsl(var(--warning) / 9%);
-  border-color: hsl(var(--warning) / 34%);
-}
-
 .approval-observation-dot {
   flex: 0 0 auto;
   width: 8px;
@@ -3253,11 +3142,6 @@ onMounted(() => {
   background: hsl(var(--success));
   border-radius: 50%;
   box-shadow: 0 0 0 4px hsl(var(--success) / 12%);
-}
-
-.approval-observation-status.is-unavailable .approval-observation-dot {
-  background: hsl(var(--warning));
-  box-shadow: 0 0 0 4px hsl(var(--warning) / 12%);
 }
 
 .approval-observation-status strong {
@@ -3284,14 +3168,6 @@ onMounted(() => {
   color: hsl(var(--foreground));
 }
 
-.approval-observation-detail {
-  scroll-margin-top: 20px;
-}
-
-.approval-observation-detail :deep(.vben-vxe-grid) {
-  margin-top: 16px;
-}
-
 @media (max-width: 1440px) {
   .approval-metric-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3304,6 +3180,7 @@ onMounted(() => {
   }
 
   .approval-observation-aside {
+    height: auto;
     min-height: auto;
   }
 }
@@ -3341,8 +3218,7 @@ onMounted(() => {
 @media (max-width: 480px) {
   .approval-funnel,
   .approval-queue,
-  .approval-observation-aside,
-  .approval-observation-detail {
+  .approval-observation-aside {
     padding: 16px;
   }
 

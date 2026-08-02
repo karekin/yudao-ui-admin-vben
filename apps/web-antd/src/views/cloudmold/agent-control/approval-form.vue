@@ -1,19 +1,17 @@
 <script lang="ts" setup>
 import type { CloudMoldAgentControlApi } from '#/api/cloudmold/agent-control';
+import type { CloudMoldAiOperationsApi } from '#/api/cloudmold/ai-operations';
 
 import { computed, ref, watch } from 'vue';
 
-import {
-  Alert,
-  Descriptions,
-  DescriptionsItem,
-  Skeleton,
-  Table,
-  Tag,
-  Typography,
-} from 'ant-design-vue';
+import { Alert, Skeleton, Tag } from 'ant-design-vue';
 
 import { getCloudMoldAgentApprovalDetail } from '#/api/cloudmold/agent-control';
+import {
+  getCloudMoldManagedWorkflowDetail,
+  getCloudMoldTemporalApprovalBlock,
+} from '#/api/cloudmold/ai-operations';
+import { router } from '#/router';
 import { getSimpleUser } from '#/api/system/user';
 
 import {
@@ -28,6 +26,10 @@ const loading = ref(false);
 const loadFailed = ref(false);
 const approval = ref<CloudMoldAgentControlApi.ApprovalDetail>();
 const hasApprovalContext = ref(false);
+const temporalBlock =
+  ref<CloudMoldAiOperationsApi.TemporalApprovalBlock>();
+const workflowDefinition =
+  ref<CloudMoldAiOperationsApi.ManagedWorkflowDetail>();
 const userNames = ref<Record<number, string>>({});
 
 const presentation = computed(() => buildApprovalPresentation(approval.value));
@@ -39,23 +41,125 @@ const genericPresentation = computed(() =>
 const decisionPresentation = computed(() =>
   buildApprovalDecisionPresentation(approval.value),
 );
-const roleLabel = computed(() =>
-  approval.value?.roleCode === 'merchandising'
-    ? '商品运营'
-    : approval.value?.roleCode || '-',
-);
-const triggerLabel = computed(() =>
-  approval.value?.reasonCode === 'TEMPORAL_SCHEDULED_WRITE'
-    ? 'Temporal 每小时定时任务'
-    : approval.value?.reasonCode || '-',
+const workflowName = computed(
+  () =>
+    workflowDefinition.value?.workflow.displayName ||
+    decisionPresentation.value?.title ||
+    '关联托管工作流',
 );
 
-const skuColumns = [
-  { dataIndex: 'skuCode', key: 'skuCode', title: 'SKU' },
-  { dataIndex: 'color', key: 'color', title: '颜色', width: 100 },
-  { dataIndex: 'size', key: 'size', title: '尺码', width: 90 },
-  { dataIndex: 'barcode', key: 'barcode', title: '条码' },
-];
+const scopeRows = computed(() => {
+  if (presentation.value) {
+    return [
+      { label: '业务步骤', value: presentation.value.actionTitle },
+      {
+        label: '计划动作',
+        value: `创建 ${presentation.value.skuRows.length} 个 SKU，并写入 ${presentation.value.lifecycleCount} 个生命周期状态`,
+      },
+      {
+        label: '已冻结业务输入',
+        value: `${presentation.value.productName} / ${presentation.value.spuCode} / ${presentation.value.barcodeCount} 个条码`,
+      },
+    ];
+  }
+
+  const entries = genericPresentation.value?.entries ?? [];
+  return [
+    {
+      label: '业务步骤',
+      value: workflowName.value || genericPresentation.value?.actionTitle || '受控业务操作',
+    },
+    {
+      label: '计划动作',
+      value: genericPresentation.value?.operationNames.join('、') || '按冻结范围执行受控运营动作',
+    },
+    {
+      label: '已冻结业务输入',
+      value:
+        entries
+          .slice(0, 2)
+          .map((entry) => `${entry.label}：${entry.value}`)
+          .join('；') || '已冻结本次业务输入与影响范围',
+    },
+  ];
+});
+
+const approvalTrail = computed(() => {
+  const waiting = temporalBlock.value?.status === 'WAITING_APPROVAL';
+  return [
+    {
+      detail: `${userName(approval.value?.requesterUserId)} · 已发起`,
+      state: 'done',
+      title: '发起人',
+    },
+    {
+      detail: approval.value?.processInstanceId ? '审批流程已提交 · 已完成' : '等待流程实例确认',
+      state: 'done',
+      title: '运营主体首审',
+    },
+    {
+      detail: `${userName(approval.value?.approverUserId)} · ${waiting ? '当前等待' : '待审批处理'}`,
+      state: 'current',
+      title: '领域责任人会签',
+    },
+    {
+      detail: '审批通过后继续 Temporal · 未开始',
+      state: 'pending',
+      title: '结束',
+    },
+  ];
+});
+
+const skillPreviewSteps = computed(() => {
+  const waiting = temporalBlock.value?.status === 'WAITING_APPROVAL';
+  const steps = workflowDefinition.value?.steps ?? [];
+  const approvalStepIndex = steps.findIndex((step) => step.approvalRequired);
+  if (steps.length > 0) {
+    return steps.map((step, index) => {
+      const isApprovalStep = index === approvalStepIndex;
+      const state =
+        approvalStepIndex < 0
+          ? index === 0
+            ? waiting
+              ? 'current'
+              : 'done'
+            : 'pending'
+          : index < approvalStepIndex || (isApprovalStep && !waiting)
+            ? 'done'
+            : isApprovalStep && waiting
+              ? 'current'
+              : 'pending';
+      return {
+        label: step.displayName || step.stepCode,
+        state,
+        status:
+          state === 'current'
+            ? '当前阻塞'
+            : state === 'done'
+              ? '已完成 / 已通过'
+              : temporalBlock.value?.skillTaskId
+                ? '等待执行'
+                : '等待审批放行',
+      };
+    });
+  }
+  return [
+    { label: '前置范围与风险校验', state: 'done', status: '已完成前置校验' },
+    {
+      label: '高风险业务操作审批',
+      state: waiting ? 'current' : 'done',
+      status: waiting ? '当前阻塞' : '审批已处理',
+    },
+    {
+      label: '创建 SkillTask 并执行已登记 Skill',
+      state: 'pending',
+      status: temporalBlock.value?.skillTaskId ? 'SkillTask 已创建' : '等待审批放行',
+    },
+    { label: '业务终态核验与证据归档', state: 'pending', status: '未开始' },
+  ];
+});
+
+const visibleSkillPreviewSteps = computed(() => skillPreviewSteps.value.slice(0, 6));
 
 function approvalIdFromBusinessKey(value?: string) {
   if (!value) return undefined;
@@ -66,6 +170,34 @@ function approvalIdFromBusinessKey(value?: string) {
 function userName(userId?: number) {
   if (!userId) return '-';
   return userNames.value[userId] || '加载用户名称中…';
+}
+
+function workflowWorkspaceLink(tab: 'managed-workflows' | 'runs') {
+  if (tab === 'managed-workflows') {
+    return router.resolve({
+      name: 'CloudMoldAiWorkflowDetail',
+      query: {
+        skillId: approval.value?.skillId,
+      },
+    }).href;
+  }
+  return router.resolve({
+    name: 'CloudMoldAiWorkflowRun',
+    query: {
+      approvalId: temporalBlock.value?.approvalId,
+      detail:
+        temporalBlock.value?.skillTaskId ? 'run' : 'temporal-block',
+      skillId: approval.value?.skillId,
+      taskId: temporalBlock.value?.skillTaskId,
+      tab: 'runs',
+      temporalRunId: temporalBlock.value?.temporalRunId,
+      temporalWorkflowId: temporalBlock.value?.temporalWorkflowId,
+    },
+  }).href;
+}
+
+function taskProgressLink() {
+  return workflowWorkspaceLink('runs');
 }
 
 async function loadUserNames(detail?: CloudMoldAgentControlApi.ApprovalDetail) {
@@ -96,12 +228,22 @@ async function loadApproval() {
   hasApprovalContext.value = Boolean(approvalId);
   if (!approvalId) {
     approval.value = undefined;
+    temporalBlock.value = undefined;
+    workflowDefinition.value = undefined;
     loadFailed.value = false;
     return;
   }
   loading.value = true;
   try {
     approval.value = await getCloudMoldAgentApprovalDetail(approvalId);
+    temporalBlock.value = approval.value
+      ? await getCloudMoldTemporalApprovalBlock(approvalId).catch(() => undefined)
+      : undefined;
+    workflowDefinition.value = approval.value?.skillId
+      ? await getCloudMoldManagedWorkflowDetail(approval.value.skillId).catch(
+          () => undefined,
+        )
+      : undefined;
     await loadUserNames(approval.value);
     loadFailed.value = !approval.value;
   } catch {
@@ -116,10 +258,7 @@ watch(() => props.id, loadApproval, { immediate: true });
 </script>
 
 <template>
-  <div class="rounded-md border bg-card p-4">
-    <Typography.Title :level="5" class="!mb-3">
-      Agent 高风险动作审批
-    </Typography.Title>
+  <div class="space-y-5">
 
     <template v-if="!hasApprovalContext">
       <Alert
@@ -141,178 +280,170 @@ watch(() => props.id, loadApproval, { immediate: true });
     />
 
     <template v-else-if="approval">
-      <template v-if="decisionPresentation">
-        <Alert
-          class="mb-4"
-          type="warning"
-          show-icon
-          message="审批前请确认：业务目标、预期产出与风险依据"
-          description="审批只放行下方已冻结的业务范围；不放行未展示的对象、金额或后续动作。"
-        />
-        <Descriptions :column="1" bordered size="small" class="mb-4">
-          <DescriptionsItem label="本次要完成什么">
-            {{ decisionPresentation.objective }}
-          </DescriptionsItem>
-          <DescriptionsItem label="审批后将留下什么">
-            <Tag
-              v-for="output in decisionPresentation.outputs"
-              :key="output"
-              color="blue"
-            >
-              {{ output }}
-            </Tag>
-          </DescriptionsItem>
-          <DescriptionsItem label="为什么需要高风险审批">
-            {{ decisionPresentation.riskReason }}
-          </DescriptionsItem>
-        </Descriptions>
-      </template>
-      <Alert
-        v-if="presentation"
-        class="mb-4"
-        type="warning"
-        show-icon
-        :message="presentation.actionTitle"
-        description="审批通过后，Agent 将写入规范商品目录并推进商品主数据生命周期。这些写入会形成正式的 Style、SPU、SKU 和条码记录。"
-      />
-      <Alert
-        v-else-if="genericPresentation"
-        class="mb-4"
-        type="info"
-        show-icon
-        :message="genericPresentation.actionTitle"
-        :description="genericPresentation.summary"
-      />
-      <Alert
-        v-else
-        class="mb-4"
-        type="warning"
-        show-icon
-        message="冻结业务快照缺失或无法解析"
-        description="当前无法确认具体业务对象和影响范围，不建议审批。"
-      />
-
-      <template v-if="presentation">
-        <Typography.Title :level="5" class="!mb-2">
-          拟写入的商品主数据
-        </Typography.Title>
-        <Descriptions :column="2" bordered size="small">
-          <DescriptionsItem label="新品名称" :span="2">
-            {{ presentation.productName }}
-          </DescriptionsItem>
-          <DescriptionsItem label="SPU">
-            {{ presentation.spuCode }}
-          </DescriptionsItem>
-          <DescriptionsItem label="规划">
-            {{ presentation.planningYear || '-' }} / {{ presentation.season }} /
-            {{ presentation.category }}
-          </DescriptionsItem>
-          <DescriptionsItem label="颜色">
-            <Tag
-              v-for="color in presentation.colorNames"
-              :key="color"
-              color="blue"
-            >
-              {{ color }}
-            </Tag>
-          </DescriptionsItem>
-          <DescriptionsItem label="尺码">
-            <Tag v-for="size in presentation.sizeNames" :key="size">
-              {{ size }}
-            </Tag>
-          </DescriptionsItem>
-          <DescriptionsItem label="变体规模">
-            {{ presentation.skuRows.length }} 个 SKU /
-            {{ presentation.barcodeCount }} 个条码
-          </DescriptionsItem>
-          <DescriptionsItem label="生命周期写入">
-            {{ presentation.lifecycleCount }} 个状态动作
-          </DescriptionsItem>
-        </Descriptions>
-
-        <Typography.Title :level="5" class="!mb-2 !mt-4">
-          SKU 明细
-        </Typography.Title>
-        <Table
-          :columns="skuColumns"
-          :data-source="presentation.skuRows"
-          :pagination="false"
-          :scroll="{ x: 640 }"
-          size="small"
-        />
-
-        <Alert
-          class="mt-4"
-          type="info"
-          show-icon
-          message="本次审批的执行边界"
-          description="本次只批准 Catalog 建档与启用，不包含定价、库存入账、渠道商品发布或真正上架；后续动作必须由各自的权威服务和审批卡口处理。"
-        />
-      </template>
-
-      <template v-else-if="genericPresentation">
-        <Typography.Title :level="5" class="!mb-2">
-          已冻结的业务范围
-        </Typography.Title>
-        <Descriptions :column="2" bordered size="small">
-          <DescriptionsItem label="业务步骤">
-            {{ genericPresentation.operationCount || '-' }} 项
-          </DescriptionsItem>
-          <DescriptionsItem label="计划动作" :span="1">
-            {{
-              genericPresentation.operationNames.join('、') || '已冻结业务输入'
-            }}
-          </DescriptionsItem>
-          <DescriptionsItem
-            v-for="entry in genericPresentation.entries"
-            :key="entry.label"
-            :label="entry.label"
-            :span="2"
+      <section
+        v-if="approval.skillId"
+        class="grid overflow-hidden rounded-xl border border-blue-300 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/50 lg:grid-cols-[minmax(0,1fr)_auto]"
+      >
+        <div class="px-5 py-4">
+          <h2 class="mb-1 text-lg font-semibold text-blue-950 dark:text-blue-100">
+            关联工作流 · {{ workflowName }}
+          </h2>
+          <p class="m-0 text-sm leading-6 text-blue-700 dark:text-blue-300">
+            <template v-if="temporalBlock">
+              阻塞节点：高风险业务操作审批 · Temporal 实例
+              <span class="break-all font-medium">{{ temporalBlock.temporalWorkflowId }}</span>
+              · 审批通过后进入 SkillTask 执行
+            </template>
+            <template v-else>已冻结本次业务输入与影响范围，审批通过后才会继续执行。</template>
+          </p>
+        </div>
+        <div class="flex border-t border-blue-200 dark:border-blue-900 lg:border-l lg:border-t-0">
+          <a
+            :href="taskProgressLink()"
+            class="flex min-h-[76px] items-center justify-center px-5 text-sm font-medium text-blue-700 transition-colors hover:bg-white/75 dark:text-blue-300 dark:hover:bg-blue-900/50"
           >
-            {{ entry.value }}
-          </DescriptionsItem>
-        </Descriptions>
-        <Alert
-          class="mt-4"
-          type="info"
-          show-icon
-          message="本次审批的执行边界"
-          description="本页只展示服务端已冻结的业务范围和步骤；审批通过后仍须由 Temporal、一次性执行凭证和领域服务分别校验后才会写入业务数据。"
-        />
-      </template>
+            查看阻塞节点
+          </a>
+          <a
+            :href="workflowWorkspaceLink('managed-workflows')"
+            class="flex min-h-[76px] items-center justify-center border-l border-blue-200 px-5 text-sm font-medium text-blue-700 transition-colors hover:bg-white/75 dark:border-blue-900 dark:text-blue-300 dark:hover:bg-blue-900/50"
+          >
+            查看 Skill 编排
+          </a>
+        </div>
+      </section>
 
-      <Typography.Title :level="5" class="!mb-2 !mt-4">
-        审批追踪
-      </Typography.Title>
-      <Descriptions :column="2" bordered size="small">
-        <DescriptionsItem label="风险等级">
-          <Tag color="orange">{{ approval.riskLevel }}</Tag>
-        </DescriptionsItem>
-        <DescriptionsItem label="触发来源">
-          {{ triggerLabel }}
-        </DescriptionsItem>
-        <DescriptionsItem label="执行岗位">
-          {{ roleLabel }}
-          <Typography.Text type="secondary">
-            （{{ approval.roleCode }}）
-          </Typography.Text>
-        </DescriptionsItem>
-        <DescriptionsItem label="技术动作">
-          {{ approval.actionCode }}
-        </DescriptionsItem>
-        <DescriptionsItem label="申请人">
-          {{ userName(approval.requesterUserId) }}
-        </DescriptionsItem>
-        <DescriptionsItem label="审批人">
-          {{ userName(approval.approverUserId) }}
-        </DescriptionsItem>
-        <DescriptionsItem label="审批 ID" :span="2">
-          {{ approval.approvalId }}
-        </DescriptionsItem>
-        <DescriptionsItem label="工作单" :span="2">
-          {{ approval.workOrderId }}
-        </DescriptionsItem>
-      </Descriptions>
+      <div class="grid gap-5 xl:grid-cols-[minmax(0,1.9fr)_minmax(320px,0.9fr)]">
+        <section class="rounded-xl border border-border bg-card p-5">
+          <h2 class="mb-4 text-lg font-semibold text-foreground">审批决策</h2>
+          <div class="mb-4 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/80 dark:bg-amber-950/40">
+            <span class="mt-0.5 text-xl font-semibold leading-5 text-amber-600 dark:text-amber-400">!</span>
+            <div>
+              <p class="m-0 font-semibold text-amber-900 dark:text-amber-200">审批前请确认：业务目标、预期产出与风险依据</p>
+              <p class="mb-0 mt-1 text-sm leading-5 text-amber-800 dark:text-amber-300">
+                仅放行已冻结的业务范围；未展示对象、金额或后续动作不在本次授权内。
+              </p>
+            </div>
+          </div>
+          <div class="overflow-hidden rounded-xl border border-border">
+            <div class="grid border-b border-border md:grid-cols-[192px_minmax(0,1fr)]">
+              <div class="bg-muted px-4 py-4 text-sm font-medium text-muted-foreground">本次要完成什么</div>
+              <div class="px-5 py-4 text-sm leading-6 text-foreground">
+                {{ decisionPresentation?.objective || '按已冻结的业务范围执行受控运营动作。' }}
+              </div>
+            </div>
+            <div class="grid border-b border-border md:grid-cols-[192px_minmax(0,1fr)]">
+              <div class="bg-muted px-4 py-4 text-sm font-medium text-muted-foreground">审批后将留下什么</div>
+              <div class="flex flex-wrap gap-2 px-5 py-4">
+                <span
+                  v-for="output in decisionPresentation?.outputs || ['业务处理结果', '状态变更记录', '可追溯的审计证据']"
+                  :key="output"
+                  class="rounded-md bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 dark:bg-blue-950/70 dark:text-blue-300"
+                >
+                  {{ output }}
+                </span>
+              </div>
+            </div>
+            <div class="grid md:grid-cols-[192px_minmax(0,1fr)]">
+              <div class="bg-muted px-4 py-4 text-sm font-medium text-muted-foreground">为什么需要高风险审批</div>
+              <div class="px-5 py-4 text-sm leading-6 text-foreground">
+                {{ decisionPresentation?.riskReason || '请确认业务对象、影响范围和执行边界后再放行。' }}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="rounded-xl border border-border bg-card p-5">
+          <h2 class="mb-4 text-lg font-semibold text-foreground">审批轨迹</h2>
+          <div class="relative space-y-5 before:absolute before:bottom-5 before:left-[5px] before:top-5 before:w-px before:bg-border">
+            <div v-for="item in approvalTrail" :key="item.title" class="relative flex gap-3 pl-0">
+              <span
+                class="relative z-10 mt-1 block h-3 w-3 shrink-0 rounded-full ring-4 ring-card"
+                :class="{
+                  'bg-[#52c41a]': item.state === 'done',
+                  'bg-[#1677ff]': item.state === 'current',
+                  'bg-[#cbd5e1]': item.state === 'pending',
+                }"
+              />
+              <div>
+                <p class="mb-0 text-sm font-semibold text-foreground">{{ item.title }}</p>
+                <p
+                  class="mb-0 mt-1 text-xs leading-5"
+                  :class="item.state === 'current' ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'"
+                >
+                  {{ item.detail }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div class="mt-5 grid gap-5 xl:grid-cols-2">
+        <section class="rounded-xl border border-border bg-card p-5">
+          <h2 class="mb-1 text-lg font-semibold text-foreground">已冻结的业务范围</h2>
+          <p class="mb-4 text-sm leading-5 text-muted-foreground">
+            审批只覆盖以下对象和动作；未列出的金额、对象或后续动作不会被放行。
+          </p>
+          <div class="space-y-3">
+            <div
+              v-for="row in scopeRows"
+              :key="row.label"
+              class="grid items-center gap-2 rounded-lg bg-muted px-3 py-3 sm:grid-cols-[140px_minmax(0,1fr)]"
+            >
+              <span class="text-sm font-medium text-muted-foreground">{{ row.label }}</span>
+              <span class="break-words text-sm leading-5 text-foreground">{{ row.value }}</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="rounded-xl border border-border bg-card p-5">
+          <div class="mb-1 flex items-center justify-between gap-3">
+            <h2 class="text-lg font-semibold text-foreground">Skill 编排预览</h2>
+            <a
+              :href="workflowWorkspaceLink('managed-workflows')"
+              class="shrink-0 text-sm font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400"
+            >
+              查看完整编排
+            </a>
+          </div>
+          <p class="mb-1 text-sm font-medium text-foreground">
+            {{ workflowDefinition?.workflow.displayName || workflowName }}
+          </p>
+          <p class="mb-4 text-sm leading-5 text-muted-foreground">
+            DeerFlow 管理 Agent；以下为当前 SkillTask 定义锁定的真实步骤。
+          </p>
+          <div class="space-y-2">
+            <div
+              v-for="(step, index) in visibleSkillPreviewSteps"
+              :key="step.label"
+              class="grid min-h-10 grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-3 py-2"
+              :class="step.state === 'current' ? 'bg-amber-50 dark:bg-amber-950/40' : ''"
+            >
+              <span
+                class="flex h-6 w-6 items-center justify-center rounded-md text-xs font-semibold"
+                :class="step.state === 'current' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300' : 'bg-blue-50 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300'"
+              >{{ index + 1 }}</span>
+              <span class="min-w-0 truncate text-sm font-medium text-foreground">{{ step.label }}</span>
+              <span
+                class="text-xs whitespace-nowrap"
+                :class="step.state === 'current' ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'"
+              >{{ step.status }}</span>
+            </div>
+          </div>
+          <p
+            v-if="skillPreviewSteps.length > visibleSkillPreviewSteps.length"
+            class="mb-0 mt-3 text-xs text-muted-foreground"
+          >
+            已展示前 {{ visibleSkillPreviewSteps.length }} 步，完整定义共 {{ skillPreviewSteps.length }} 步。
+          </p>
+        </section>
+      </div>
+
+      <p class="mb-0 text-xs leading-5 text-muted-foreground">
+        审批 ID：{{ approval.approvalId }} · 工作单：{{ approval.workOrderId }} · 风险等级：
+        <Tag color="orange" class="!m-0">{{ approval.riskLevel }}</Tag>
+      </p>
     </template>
   </div>
 </template>

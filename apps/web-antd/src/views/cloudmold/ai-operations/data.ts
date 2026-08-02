@@ -39,9 +39,13 @@ export const workflowRunStatusMeta: Record<
   string,
   { color: string; label: string }
 > = {
+  APPROVED: { color: 'success', label: '已批准' },
   CANCELLED: { color: 'default', label: '已取消' },
+  CLAIMED: { color: 'processing', label: '已认领' },
   FAILED: { color: 'error', label: '失败' },
   NEEDS_REVIEW: { color: 'warning', label: '需人工复核' },
+  NOTICED: { color: 'processing', label: '已通知' },
+  OPEN: { color: 'default', label: '已创建' },
   PAUSED: { color: 'warning', label: '已暂停' },
   QUEUED: { color: 'default', label: '排队中' },
   RUNNING: { color: 'processing', label: '运行中' },
@@ -237,6 +241,7 @@ const managedWorkflowOwnerRoleLabels: Record<string, string> = {
   'logistics-operations': '物流运营',
   'logistics-settlement-operator': '物流结算运营',
   'merchant-experience-operator': '商家体验运营',
+  'merchant-managed-growth-operator': '托管商家成长运营',
   'merchant-onboarding-operator': '商家入驻运营',
   'merchant-settlement-operator': '商家结算运营',
   'operations-control': '经营总控',
@@ -250,6 +255,7 @@ const managedWorkflowOwnerRoleLabels: Record<string, string> = {
   'profit-loss-operator': '损益改善运营',
   'quality-operations': '质量运营',
   'replenishment-operator': '补货运营',
+  'supply-planning': '需求计划运营',
   'risk-operations': '风险争议与损失运营',
   'supplier-sourcing-operator': '供应商寻源运营',
   'supply-chain-operator': '供应链运营',
@@ -417,6 +423,13 @@ export const roleCapabilityProfiles: RoleCapabilityProfile[] = [
     dailyDuty: '跟踪商责、赔付与整改复核',
     verifiableOutcome: '商责案件、整改读回',
     externalFactGate: '外部商家履约事实',
+  },
+  {
+    domain: '商家与供给',
+    ownerRole: 'merchant-managed-growth-operator',
+    dailyDuty: '跟进入驻诊断、验厂、试用期与月度成材评审',
+    verifiableOutcome: '托管入驻、验厂、评分与等级权益读回',
+    externalFactGate: '验厂现场、供应链与质量证据，以及买手和人工终审结论',
   },
   {
     domain: '商家与供给',
@@ -689,7 +702,8 @@ const legacyAgentControlRoleLabels: Record<string, string> = {
   'customer-service': '客服',
   'growth-marketing': '增长营销运营',
   'inventory-control': '库控',
-  'merchant-acquisition': '招商',
+  // 保留旧运行记录中的 role code，但使用当前商家经营域的展示语义。
+  'merchant-acquisition': '商家入驻',
   'merchant-experience': '商家体验运营',
   'merchant-operations': '商家运营',
   merchandising: '商品运营',
@@ -1015,38 +1029,6 @@ export function useManagedRunFormSchema(): VbenFormSchema[] {
     codeInput('riskLevel', '风险等级'),
     statusInput(),
   ];
-}
-
-export function useManagedArtifactColumns(): VxeTableGridOptions['columns'] {
-  return withCloudMoldTableColumns([
-    {
-      field: 'skillId',
-      fixed: 'left',
-      minWidth: 180,
-      slots: { default: 'managed-artifact-workflow' },
-      title: '工作流',
-    },
-    {
-      field: 'businessOutcome',
-      minWidth: 440,
-      slots: { default: 'managed-artifact-outcome' },
-      title: '业务产物',
-    },
-    {
-      field: 'status',
-      minWidth: 90,
-      slots: { default: 'managed-artifact-status' },
-      title: '状态',
-    },
-    timeColumn('completedAt', '完成时间'),
-    {
-      field: 'action',
-      fixed: 'right',
-      minWidth: 72,
-      slots: { default: 'managed-artifact-action' },
-      title: '操作',
-    },
-  ]);
 }
 
 export function useManagedObservationColumns(): VxeTableGridOptions['columns'] {

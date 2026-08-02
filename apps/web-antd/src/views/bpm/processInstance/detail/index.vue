@@ -2,7 +2,7 @@
 import type { BpmProcessInstanceApi } from '#/api/bpm/processInstance';
 import type { SystemUserApi } from '#/api/system/user';
 
-import { nextTick, onMounted, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 import {
@@ -83,6 +83,12 @@ const detailForm = ref({
 const writableFields: Array<string> = []; // 表单可以编辑的字段
 
 const BusinessFormComponent = shallowRef<any>(null); // 异步组件(业务表单）
+const isAgentApprovalAudit = computed(
+  () =>
+    processDefinition.value?.formCustomViewPath?.includes(
+      'agent-control/approval-form',
+    ) ?? false,
+);
 
 /** 获取详情 */
 async function getDetail() {
@@ -305,7 +311,13 @@ onMounted(async () => {
           <Tabs v-model:active-key="activeTab">
             <TabPane tab="审批详情" key="form" class="pb-20 pr-3">
               <Row :gutter="[48, 24]">
-                <Col :xs="24" :sm="24" :md="18" :lg="18" :xl="16">
+                <Col
+                  :xs="24"
+                  :sm="24"
+                  :md="isAgentApprovalAudit ? 24 : 18"
+                  :lg="isAgentApprovalAudit ? 24 : 18"
+                  :xl="isAgentApprovalAudit ? 24 : 16"
+                >
                   <!-- 流程表单 -->
                   <div
                     v-if="
@@ -327,7 +339,14 @@ onMounted(async () => {
                     <BusinessFormComponent :id="processInstance?.businessKey" />
                   </div>
                 </Col>
-                <Col :xs="24" :sm="24" :md="6" :lg="6" :xl="8">
+                <Col
+                  v-if="!isAgentApprovalAudit"
+                  :xs="24"
+                  :sm="24"
+                  :md="6"
+                  :lg="6"
+                  :xl="8"
+                >
                   <div class="mt-4">
                     <ProcessInstanceTimeline :activity-nodes="activityNodes" />
                   </div>

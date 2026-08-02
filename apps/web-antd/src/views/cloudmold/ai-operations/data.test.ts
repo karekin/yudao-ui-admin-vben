@@ -14,7 +14,6 @@ import {
   temporalDiscoverySourceSummary,
   temporalDispatchOutcomeSummary,
   toCoveragePercent,
-  useManagedArtifactColumns,
   useManagedObservationColumns,
   useManagedRunColumns,
   useManagedWorkflowColumns,
@@ -68,10 +67,13 @@ describe('ai operations presentation helpers', () => {
     expect(managedWorkflowOwnerRoleLabel('pricing-revenue-operator')).toBe(
       '定价与收益运营',
     );
+    expect(managedWorkflowOwnerRoleLabel('merchant-managed-growth-operator')).toBe(
+      '托管商家成长运营',
+    );
     expect(managedWorkflowOwnerRoleLabel('future-role')).toBe('future-role');
   });
 
-  it('maps 35 managed operating roles plus five visible horizontal capability gaps', () => {
+  it('maps 36 managed operating roles plus five visible horizontal capability gaps', () => {
     const map = buildRoleCapabilityMap(
       [
         {
@@ -110,16 +112,16 @@ describe('ai operations presentation helpers', () => {
       ],
     );
 
-    expect(roleCapabilityProfiles).toHaveLength(40);
+    expect(roleCapabilityProfiles).toHaveLength(41);
     expect(
       new Set(roleCapabilityProfiles.map((item) => item.ownerRole)).size,
-    ).toBe(40);
+    ).toBe(41);
     expect(
       roleCapabilityProfiles.filter(
         (item) => item.capabilityStage !== 'FOUNDATION_REQUIRED',
       ),
-    ).toHaveLength(35);
-    expect(map).toHaveLength(40);
+    ).toHaveLength(36);
+    expect(map).toHaveLength(41);
     expect(
       map.find((item) => item.ownerRole === 'supplier-sourcing-operator'),
     ).toMatchObject({
@@ -135,6 +137,15 @@ describe('ai operations presentation helpers', () => {
     expect(
       map.find((item) => item.ownerRole === 'warehouse-operations'),
     ).toMatchObject({ workflowCount: 0 });
+    expect(
+      map.find(
+        (item) => item.ownerRole === 'merchant-managed-growth-operator',
+      ),
+    ).toMatchObject({
+      dailyDuty: '跟进入驻诊断、验厂、试用期与月度成材评审',
+      verifiableOutcome: '托管入驻、验厂、评分与等级权益读回',
+      externalFactGate: '验厂现场、供应链与质量证据，以及买手和人工终审结论',
+    });
     expect(
       map.find((item) => item.ownerRole === 'privacy-security-operator'),
     ).toMatchObject({
@@ -162,8 +173,8 @@ describe('ai operations presentation helpers', () => {
           code: 'dewu',
           domains: [
             {
-              code: 'merchant-acquisition',
-              name: '招商域',
+              code: 'merchant',
+              name: '商家经营域',
               order: 10,
               roles: [
                 {
@@ -250,7 +261,7 @@ describe('ai operations presentation helpers', () => {
       code: 'dewu',
       domains: [
         {
-          code: 'merchant-acquisition',
+          code: 'merchant',
           roles: [
             {
               roleCode: 'merchant-onboarding-operator',
@@ -285,7 +296,7 @@ describe('ai operations presentation helpers', () => {
   it('offers every managed role and preserves historical approval roles', () => {
     const options = buildApprovalRoleOptions();
 
-    expect(options).toHaveLength(47);
+    expect(options).toHaveLength(48);
     expect(options).toEqual(
       expect.arrayContaining([
         { label: '风险争议与损失运营', value: 'risk-operations' },
@@ -294,6 +305,10 @@ describe('ai operations presentation helpers', () => {
         { label: '增长营销运营', value: 'growth-marketing' },
         { label: '商家运营', value: 'merchant-operations' },
         { label: '采购运营', value: 'procurement' },
+        {
+          label: '托管商家成长运营',
+          value: 'merchant-managed-growth-operator',
+        },
       ]),
     );
     expect(agentControlRoleLabel('supplier-sourcing-operator')).toBe(
@@ -312,7 +327,6 @@ describe('ai operations presentation helpers', () => {
 
   it('puts concrete business outcomes ahead of technical evidence', () => {
     const runColumns = useManagedRunColumns();
-    const artifactColumns = useManagedArtifactColumns();
 
     expect(runColumns).toEqual(
       expect.arrayContaining([
@@ -320,19 +334,6 @@ describe('ai operations presentation helpers', () => {
           field: 'businessOutcome',
           title: '业务结果',
         }),
-      ]),
-    );
-    expect(artifactColumns).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          field: 'businessOutcome',
-          title: '业务产物',
-        }),
-      ]),
-    );
-    expect(artifactColumns).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ title: '终态产物哈希' }),
       ]),
     );
   });
@@ -407,13 +408,6 @@ describe('ai operations presentation helpers', () => {
       'businessOutcome',
       'status',
       'currentStepCode',
-      'completedAt',
-      'action',
-    ]);
-    expect(fieldNames(useManagedArtifactColumns())).toEqual([
-      'skillId',
-      'businessOutcome',
-      'status',
       'completedAt',
       'action',
     ]);

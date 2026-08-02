@@ -59,6 +59,7 @@
     "fast-xml-parser": "catalog:",
     "highlight.js": "catalog:",
     "livekit-client": "catalog:",
+    "markdown-it": "catalog:",
     "pinia": "catalog:",
     "steady-xml": "catalog:",
     "tinymce": "catalog:",
@@ -70,5 +71,8 @@
     "vue3-print-nb": "catalog:",
     "vue3-signature": "catalog:",
     "vuedraggable": "catalog:"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "catalog:"
   }
 }
