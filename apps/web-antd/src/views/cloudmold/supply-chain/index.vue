@@ -6,7 +6,7 @@ import type { CloudMoldInventoryApi } from '#/api/cloudmold/inventory';
 import type { CloudMoldSupplyPlanningApi } from '#/api/cloudmold/supply-planning';
 
 import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 
 import { Page } from '@vben/common-ui';
 
@@ -97,6 +97,7 @@ interface SupplyCommandForm {
   onHandQuantity?: number;
 }
 
+const route = useRoute();
 const router = useRouter();
 const loading = ref(false);
 const loadError = ref('');
@@ -113,6 +114,52 @@ const commandMode = ref('CREATE_FORECAST');
 const commandForm = ref<SupplyCommandForm>({});
 const workItemKeyword = ref('');
 const workItemType = ref('ALL');
+
+const workspaceProfile = computed(() => {
+  if (route.path.endsWith('/demand-plans')) {
+    return {
+      description:
+        '统一管理销量预测、预测版本与真实销量回测，向供应计划提供冻结需求基线。',
+      eyebrow: 'SALES & DEMAND PLANNING',
+      itemTypes: ['FORECAST', 'FORECAST_EVALUATION'],
+      title: '销量与需求计划',
+    };
+  }
+  if (route.path.endsWith('/supply-plans')) {
+    return {
+      description:
+        '基于需求基线、库存、在途、产能、预算和服务水平评估并发布供应情景。',
+      eyebrow: 'SUPPLY & S&OP PLANNING',
+      itemTypes: ['SUPPLY_PLAN', 'PLAN_SCENARIO'],
+      title: '供应计划与情景',
+    };
+  }
+  if (route.path.endsWith('/replenishments')) {
+    return {
+      description:
+        '将已批准供应计划转化为采购或调拨建议，并跟踪到规范执行单据。',
+      eyebrow: 'REPLENISHMENT PLANNING',
+      itemTypes: ['REPLENISHMENT'],
+      title: '补货计划',
+    };
+  }
+  if (route.path.endsWith('/inventory-health')) {
+    return {
+      description:
+        '按冻结策略扫描缺货、低库存、质量与履约风险，形成可认领、可关闭的问题闭环。',
+      eyebrow: 'INVENTORY HEALTH & CONTROL',
+      itemTypes: ['INVENTORY_ISSUE', 'INVENTORY_SCAN'],
+      title: '库存健康',
+    };
+  }
+  return {
+    description:
+      '聚焦库存风险、供需决策和履约异常，从发现问题到下达执行形成闭环。',
+    eyebrow: 'SUPPLY CHAIN OPERATIONS',
+    itemTypes: [] as string[],
+    title: '供应链控制塔',
+  };
+});
 
 const toNumber = (value?: string) => Number(value ?? 0);
 
@@ -189,6 +236,8 @@ const openIssueCount = computed(
 const filteredWorkItems = computed(() =>
   workItems.value.filter(
     (item) =>
+      (workspaceProfile.value.itemTypes.length === 0 ||
+        workspaceProfile.value.itemTypes.includes(item.itemType)) &&
       (workItemType.value === 'ALL' || item.itemType === workItemType.value) &&
       matchesWorkbenchItem(item, workItemKeyword.value),
   ),
@@ -620,11 +669,9 @@ onMounted(loadData);
     <div class="supply-tower space-y-4">
       <section class="workbench-hero">
         <div>
-          <div class="workbench-eyebrow">SUPPLY CHAIN OPERATIONS</div>
-          <h1>供应链控制塔</h1>
-          <p>
-            聚焦库存风险、供需决策和履约异常，从发现问题到下达执行形成闭环。
-          </p>
+          <div class="workbench-eyebrow">{{ workspaceProfile.eyebrow }}</div>
+          <h1>{{ workspaceProfile.title }}</h1>
+          <p>{{ workspaceProfile.description }}</p>
           <div class="workbench-sync">
             数据更新：{{ lastUpdatedAt }} · {{ balanceTotal }} 个库存余额 ·
             {{ fulfillmentTotal }} 个履约单
@@ -924,13 +971,21 @@ onMounted(loadData);
             </div>
             <Space>
               <Button
-                @click="router.push('/cloudmold/supply-chain/warehouses')"
+                @click="
+                  router.push(
+                    '/cloudmold/supply-chain/warehouse-execution/warehouses',
+                  )
+                "
               >
                 仓网视图
               </Button>
               <Button
                 type="primary"
-                @click="router.push('/cloudmold/supply-chain/inventory')"
+                @click="
+                  router.push(
+                    '/cloudmold/supply-chain/inventory-control/balances',
+                  )
+                "
               >
                 进入库存作业
               </Button>
@@ -1013,7 +1068,11 @@ onMounted(loadData);
             <template v-else-if="column.key === 'action'">
               <Button
                 type="link"
-                @click="router.push('/cloudmold/supply-chain/inventory')"
+                @click="
+                  router.push(
+                    '/cloudmold/supply-chain/inventory-control/balances',
+                  )
+                "
               >
                 去处理
               </Button>

@@ -3,6 +3,7 @@ import type { VxeTableGridOptions } from '#/adapter/vxe-table';
 import type { CloudMoldInventoryApi } from '#/api/cloudmold/inventory';
 
 import { ref } from 'vue';
+import { useRoute } from 'vue-router';
 
 import { Page, useVbenModal } from '@vben/common-ui';
 
@@ -35,6 +36,15 @@ import {
 import '../shared/tabbed-grid.css';
 
 defineOptions({ name: 'CloudMoldInventory' });
+
+const route = useRoute();
+const inventoryTab = ref(
+  route.path.endsWith('/reservations')
+    ? 'reservations'
+    : route.path.endsWith('/ledger')
+      ? 'ledger'
+      : 'balances',
+);
 
 type StatusMeta = Record<number | string, { color: string; label: string }>;
 
@@ -189,7 +199,10 @@ const [LedgerGrid, LedgerGridApi] = useVbenVxeGrid({
     <EvidenceAlert page="inventory" />
     <InventoryCommandModal @success="refreshInventory" />
 
-    <Tabs class="cloudmold-grid-tabs min-h-0 w-full flex-1">
+    <Tabs
+      v-model:active-key="inventoryTab"
+      class="cloudmold-grid-tabs min-h-0 w-full flex-1"
+    >
       <Tabs.TabPane key="balances" tab="库存余额">
         <BalanceGrid table-title="库存余额">
           <template #stock-status="{ row }">

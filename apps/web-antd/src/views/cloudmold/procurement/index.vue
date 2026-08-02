@@ -101,6 +101,13 @@ const workspaces: Array<{
   { key: 'PURCHASE_ORDER', label: '采购订单' },
 ];
 
+function workspaceFromRoute(): CloudMoldProcurementApi.ProcurementWorkspace {
+  if (route.path.endsWith('/purchase-orders')) return 'PURCHASE_ORDER';
+  if (route.path.endsWith('/sourcing')) return 'RFQ';
+  if (route.path.endsWith('/purchase-requisitions')) return 'REQUISITION';
+  return 'REQUISITION';
+}
+
 const statusValues: Record<
   CloudMoldProcurementApi.ProcurementWorkspace,
   string[]
@@ -430,6 +437,7 @@ watch(workspace, () => {
 });
 
 onMounted(async () => {
+  workspace.value = workspaceFromRoute();
   await loadPage();
   const awardId = route.params.awardId;
   if (typeof awardId === 'string' && awardId) {

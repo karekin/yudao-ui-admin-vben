@@ -774,7 +774,11 @@ onMounted(loadData);
             </div>
             <Button
               type="primary"
-              @click="router.push('/cloudmold/supply-chain/inventory')"
+              @click="
+                router.push(
+                  '/cloudmold/supply-chain/inventory-control/balances',
+                )
+              "
             >
               进入库存作业
             </Button>
@@ -852,7 +856,11 @@ onMounted(loadData);
             <template v-else-if="column.key === 'action'">
               <Button
                 type="link"
-                @click="router.push('/cloudmold/supply-chain/inventory')"
+                @click="
+                  router.push(
+                    '/cloudmold/supply-chain/inventory-control/balances',
+                  )
+                "
               >
                 去处理
               </Button>

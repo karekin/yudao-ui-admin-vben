@@ -74,22 +74,13 @@ const routes: RouteRecordRaw[] = [
         ],
       },
       {
-        path: 'inventory-warehouse',
-        name: 'CloudMoldInventoryWarehouse',
+        path: 'warehouse-execution',
+        name: 'CloudMoldWarehouseExecution',
         meta: {
-          title: '库存与仓储',
+          title: '仓储执行',
           icon: 'lucide:warehouse',
         },
         children: [
-          {
-            path: 'inventory',
-            name: 'CloudMoldInventory',
-            component: () => import('#/views/cloudmold/inventory/index.vue'),
-            meta: {
-              title: '库存管理',
-              authority: ['cloudmold:inventory:query'],
-            },
-          },
           {
             path: 'warehouses',
             name: 'CloudMoldWarehouse',
@@ -122,19 +113,129 @@ const routes: RouteRecordRaw[] = [
         ],
       },
       {
-        path: 'procurement-center',
+        path: 'planning',
+        name: 'CloudMoldSupplyPlanningCenter',
+        meta: {
+          title: '供销计划',
+          icon: 'lucide:chart-no-axes-combined',
+        },
+        children: [
+          {
+            path: 'demand-plans',
+            name: 'CloudMoldDemandPlans',
+            component: () => import('#/views/cloudmold/supply-chain/index.vue'),
+            meta: {
+              title: '销量与需求计划',
+              authority: ['cloudmold:supply-planning:query'],
+            },
+          },
+          {
+            path: 'supply-plans',
+            name: 'CloudMoldSupplyPlans',
+            component: () => import('#/views/cloudmold/supply-chain/index.vue'),
+            meta: {
+              title: '供应计划与情景',
+              authority: ['cloudmold:supply-planning:query'],
+            },
+          },
+          {
+            path: 'replenishments',
+            name: 'CloudMoldReplenishments',
+            component: () => import('#/views/cloudmold/supply-chain/index.vue'),
+            meta: {
+              title: '补货计划',
+              authority: ['cloudmold:supply-planning:query'],
+            },
+          },
+        ],
+      },
+      {
+        path: 'inventory-control',
+        name: 'CloudMoldInventoryControlCenter',
+        meta: {
+          title: '库存控制',
+          icon: 'lucide:shield-check',
+        },
+        children: [
+          {
+            path: 'balances',
+            name: 'CloudMoldInventoryBalances',
+            component: () => import('#/views/cloudmold/inventory/index.vue'),
+            meta: {
+              title: '库存余额',
+              authority: ['cloudmold:inventory:query'],
+            },
+          },
+          {
+            path: 'reservations',
+            name: 'CloudMoldInventoryReservations',
+            component: () => import('#/views/cloudmold/inventory/index.vue'),
+            meta: {
+              title: '预占与分配',
+              authority: ['cloudmold:inventory:query'],
+            },
+          },
+          {
+            path: 'ledger',
+            name: 'CloudMoldInventoryLedger',
+            component: () => import('#/views/cloudmold/inventory/index.vue'),
+            meta: {
+              title: '库存流水',
+              authority: ['cloudmold:inventory:query'],
+            },
+          },
+          {
+            path: 'inventory-health',
+            name: 'CloudMoldInventoryHealth',
+            component: () => import('#/views/cloudmold/supply-chain/index.vue'),
+            meta: {
+              title: '库存健康',
+              authority: ['cloudmold:supply-planning:query'],
+            },
+          },
+        ],
+      },
+      {
+        path: 'procurement-execution',
         name: 'CloudMoldProcurementCenter',
         meta: {
-          title: '采购与寻源',
+          title: '采购执行',
           icon: 'lucide:handshake',
         },
         children: [
+          {
+            path: 'purchase-requisitions',
+            name: 'CloudMoldPurchaseRequisitions',
+            component: () => import('#/views/cloudmold/procurement/index.vue'),
+            meta: {
+              title: '采购申请',
+              authority: ['cloudmold:procurement:requisition:query'],
+            },
+          },
+          {
+            path: 'sourcing',
+            name: 'CloudMoldProcurementSourcing',
+            component: () => import('#/views/cloudmold/procurement/index.vue'),
+            meta: {
+              title: '寻源与定标',
+              authority: ['cloudmold:procurement:sourcing:query'],
+            },
+          },
+          {
+            path: 'purchase-orders',
+            name: 'CloudMoldPurchaseOrders',
+            component: () => import('#/views/cloudmold/procurement/index.vue'),
+            meta: {
+              title: '采购订单',
+              authority: ['cloudmold:procurement:order:query'],
+            },
+          },
           {
             path: 'workbench',
             name: 'CloudMoldProcurement',
             component: () => import('#/views/cloudmold/procurement/index.vue'),
             meta: {
-              title: '寻源与定标',
+              title: '采购全景',
               authority: [
                 'cloudmold:procurement:requisition:query',
                 'cloudmold:procurement:sourcing:query',

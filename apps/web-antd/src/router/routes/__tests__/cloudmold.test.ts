@@ -24,8 +24,10 @@ describe('cloudmold administration navigation', () => {
     const groups = [
       ['CloudMoldProductCenter', '商品中心'],
       ['CloudMoldMerchantChannel', '商家与渠道'],
-      ['CloudMoldInventoryWarehouse', '库存与仓储'],
-      ['CloudMoldProcurementCenter', '采购与寻源'],
+      ['CloudMoldWarehouseExecution', '仓储执行'],
+      ['CloudMoldSupplyPlanningCenter', '供销计划'],
+      ['CloudMoldInventoryControlCenter', '库存控制'],
+      ['CloudMoldProcurementCenter', '采购执行'],
       ['CloudMoldFinanceCenter', '财务与风控'],
       ['CloudMoldOrderFulfillment', '订单与履约'],
       ['CloudMoldDataOperations', '数据运营'],
@@ -36,18 +38,20 @@ describe('cloudmold administration navigation', () => {
     ).toEqual(groups.map(([, title]) => title));
     expect(
       groups.map(([name]) => childByName(root, name)?.children?.length),
-    ).toEqual([2, 2, 4, 3, 2, 4, 1]);
+    ).toEqual([2, 2, 3, 3, 4, 6, 2, 4, 1]);
   });
 
   it('uses operator-facing labels instead of canonical-model terminology', () => {
     const groupNames = new Set([
       'CloudMoldDataOperations',
       'CloudMoldFinanceCenter',
-      'CloudMoldInventoryWarehouse',
+      'CloudMoldInventoryControlCenter',
       'CloudMoldMerchantChannel',
       'CloudMoldOrderFulfillment',
       'CloudMoldProcurementCenter',
       'CloudMoldProductCenter',
+      'CloudMoldSupplyPlanningCenter',
+      'CloudMoldWarehouseExecution',
     ]);
     const pageTitles = root.children
       ?.filter((route) => groupNames.has(String(route.name)))
@@ -61,11 +65,20 @@ describe('cloudmold administration navigation', () => {
       '渠道商品',
       '商家管理',
       '经营主体与授权',
-      '库存管理',
       '仓库与库位',
       '库存调拨',
       '采购收货与上架',
+      '销量与需求计划',
+      '供应计划与情景',
+      '补货计划',
+      '库存余额',
+      '预占与分配',
+      '库存流水',
+      '库存健康',
+      '采购申请',
       '寻源与定标',
+      '采购订单',
+      '采购全景',
       '定标详情',
       '来料质检处置',
       '应付与匹配',
@@ -124,11 +137,11 @@ describe('cloudmold administration navigation', () => {
       history: createMemoryHistory(),
       routes,
     });
-    expect(router.resolve('/cloudmold/procurement-center/workbench').name).toBe(
-      'CloudMoldProcurement',
-    );
     expect(
-      router.resolve('/cloudmold/procurement-center/awards/award-1').name,
+      router.resolve('/cloudmold/procurement-execution/workbench').name,
+    ).toBe('CloudMoldProcurement');
+    expect(
+      router.resolve('/cloudmold/procurement-execution/awards/award-1').name,
     ).toBe('CloudMoldProcurementAwardDetail');
     expect(
       router.resolve('/cloudmold/finance-center/procure-to-pay').name,
@@ -140,10 +153,16 @@ describe('cloudmold administration navigation', () => {
   });
 
   it('registers final Figma-backed inbound and incoming-quality workbenches', () => {
-    const inventory = childByName(root, 'CloudMoldInventoryWarehouse')!;
+    const warehouse = childByName(root, 'CloudMoldWarehouseExecution')!;
     const procurement = childByName(root, 'CloudMoldProcurementCenter')!;
-    const inbound = childByName(inventory, 'CloudMoldProcurementInbound');
+    const planning = childByName(root, 'CloudMoldSupplyPlanningCenter')!;
+    const inventory = childByName(root, 'CloudMoldInventoryControlCenter')!;
+    const inbound = childByName(warehouse, 'CloudMoldProcurementInbound');
     const quality = childByName(procurement, 'CloudMoldProcurementQuality');
+    const demandPlans = childByName(planning, 'CloudMoldDemandPlans');
+    const supplyPlans = childByName(planning, 'CloudMoldSupplyPlans');
+    const replenishments = childByName(planning, 'CloudMoldReplenishments');
+    const inventoryHealth = childByName(inventory, 'CloudMoldInventoryHealth');
 
     expect(inbound?.path).toBe('procurement-inbound');
     expect(inbound?.meta?.authority).toEqual(['cloudmold:warehouse:query']);
@@ -151,17 +170,41 @@ describe('cloudmold administration navigation', () => {
     expect(quality?.meta?.authority).toEqual([
       'cloudmold:quality:procurement-receipt-inspection:query',
     ]);
+    expect(demandPlans?.meta?.authority).toEqual([
+      'cloudmold:supply-planning:query',
+    ]);
+    expect(supplyPlans?.meta?.authority).toEqual([
+      'cloudmold:supply-planning:query',
+    ]);
+    expect(replenishments?.meta?.authority).toEqual([
+      'cloudmold:supply-planning:query',
+    ]);
+    expect(inventoryHealth?.meta?.authority).toEqual([
+      'cloudmold:supply-planning:query',
+    ]);
 
     const router = createRouter({
       history: createMemoryHistory(),
       routes,
     });
     expect(
-      router.resolve('/cloudmold/inventory-warehouse/procurement-inbound').name,
+      router.resolve('/cloudmold/warehouse-execution/procurement-inbound').name,
     ).toBe('CloudMoldProcurementInbound');
     expect(
-      router.resolve('/cloudmold/procurement-center/incoming-quality').name,
+      router.resolve('/cloudmold/procurement-execution/incoming-quality').name,
     ).toBe('CloudMoldProcurementQuality');
+    expect(router.resolve('/cloudmold/planning/demand-plans').name).toBe(
+      'CloudMoldDemandPlans',
+    );
+    expect(router.resolve('/cloudmold/planning/supply-plans').name).toBe(
+      'CloudMoldSupplyPlans',
+    );
+    expect(router.resolve('/cloudmold/planning/replenishments').name).toBe(
+      'CloudMoldReplenishments',
+    );
+    expect(
+      router.resolve('/cloudmold/inventory-control/inventory-health').name,
+    ).toBe('CloudMoldInventoryHealth');
   });
 
   it('separates query route authority from warehouse and quality commands', () => {
@@ -221,13 +264,13 @@ describe('cloudmold administration navigation', () => {
       (route) => route.component && route.meta?.hideInMenu,
     ).length;
 
-    expect(groupedPageCount).toBe(18);
+    expect(groupedPageCount).toBe(27);
     expect(directOperationsPageCount).toBe(14);
     expect(operationsRoot.meta?.hideInMenu).toBe(true);
     expect(hiddenDirectPageCount).toBe(4);
     expect(
       groupedPageCount! + directOperationsPageCount! + hiddenDirectPageCount!,
-    ).toBe(36);
+    ).toBe(45);
   });
 
   it('registers L3 diagnostics as stable routes outside backend menus', () => {
