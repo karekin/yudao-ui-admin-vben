@@ -38,7 +38,7 @@ describe('cloudmold administration navigation', () => {
     ).toEqual(groups.map(([, title]) => title));
     expect(
       groups.map(([name]) => childByName(root, name)?.children?.length),
-    ).toEqual([2, 2, 3, 3, 5, 6, 2, 4, 1]);
+    ).toEqual([2, 2, 5, 3, 7, 7, 2, 4, 1]);
   });
 
   it('uses operator-facing labels instead of canonical-model terminology', () => {
@@ -67,6 +67,8 @@ describe('cloudmold administration navigation', () => {
       '经营主体与授权',
       '仓库与库位',
       '库存调拨',
+      '库存盘点',
+      '库存报废',
       '采购收货与上架',
       '销量与需求计划',
       '供应计划与情景',
@@ -76,12 +78,15 @@ describe('cloudmold administration navigation', () => {
       '预占与分配',
       '库存流水',
       '库存健康',
+      '安全库存策略',
+      '库存健康快照',
       '采购申请',
       '寻源与定标',
       '采购订单',
       '采购全景',
       '定标详情',
       '来料质检处置',
+      '供应商退供',
       '应付与匹配',
       '供应商发票匹配详情',
       '订单管理',
@@ -91,6 +96,30 @@ describe('cloudmold administration navigation', () => {
       '数据健康',
     ]);
     expect(pageTitles?.some((title) => title.startsWith('规范'))).toBe(false);
+  });
+
+  it('routes every formal supply-chain document and control workspace', () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes,
+    });
+
+    expect(
+      router.resolve('/cloudmold/procurement-execution/supplier-returns').name,
+    ).toBe('CloudMoldSupplierReturn');
+    expect(
+      router.resolve('/cloudmold/warehouse-execution/stock-counts').name,
+    ).toBe('CloudMoldStockCount');
+    expect(
+      router.resolve('/cloudmold/warehouse-execution/inventory-scraps').name,
+    ).toBe('CloudMoldInventoryScrap');
+    expect(
+      router.resolve('/cloudmold/inventory-control/safety-stock-policies').name,
+    ).toBe('CloudMoldSafetyStockPolicy');
+    expect(
+      router.resolve('/cloudmold/inventory-control/inventory-health-snapshots')
+        .name,
+    ).toBe('CloudMoldInventoryHealthSnapshot');
   });
 
   it('registers CloudMold-only procurement and finance workbenches with hidden details', () => {
@@ -276,13 +305,13 @@ describe('cloudmold administration navigation', () => {
       (route) => route.component && route.meta?.hideInMenu,
     ).length;
 
-    expect(groupedPageCount).toBe(28);
+    expect(groupedPageCount).toBe(33);
     expect(directOperationsPageCount).toBe(14);
     expect(operationsRoot.meta?.hideInMenu).toBe(true);
     expect(hiddenDirectPageCount).toBe(4);
     expect(
       groupedPageCount! + directOperationsPageCount! + hiddenDirectPageCount!,
-    ).toBe(46);
+    ).toBe(51);
   });
 
   it('registers L3 diagnostics as stable routes outside backend menus', () => {

@@ -101,6 +101,26 @@ const routes: RouteRecordRaw[] = [
             },
           },
           {
+            path: 'stock-counts',
+            name: 'CloudMoldStockCount',
+            component: () =>
+              import('#/views/cloudmold/warehouse/stock-count/index.vue'),
+            meta: {
+              title: '库存盘点',
+              authority: ['cloudmold:warehouse:query'],
+            },
+          },
+          {
+            path: 'inventory-scraps',
+            name: 'CloudMoldInventoryScrap',
+            component: () =>
+              import('#/views/cloudmold/warehouse/inventory-scrap/index.vue'),
+            meta: {
+              title: '库存报废',
+              authority: ['cloudmold:warehouse:inventory-scrap:query'],
+            },
+          },
+          {
             path: 'procurement-inbound',
             name: 'CloudMoldProcurementInbound',
             component: () =>
@@ -202,6 +222,26 @@ const routes: RouteRecordRaw[] = [
               authority: ['cloudmold:supply-planning:query'],
             },
           },
+          {
+            path: 'safety-stock-policies',
+            name: 'CloudMoldSafetyStockPolicy',
+            component: () =>
+              import('#/views/cloudmold/inventory/safety-stock-policy/index.vue'),
+            meta: {
+              title: '安全库存策略',
+              authority: ['cloudmold:supply-planning:policy:query'],
+            },
+          },
+          {
+            path: 'inventory-health-snapshots',
+            name: 'CloudMoldInventoryHealthSnapshot',
+            component: () =>
+              import('#/views/cloudmold/inventory/health-snapshot/index.vue'),
+            meta: {
+              title: '库存健康快照',
+              authority: ['cloudmold:supply-planning:health-snapshot:query'],
+            },
+          },
         ],
       },
       {
@@ -274,6 +314,16 @@ const routes: RouteRecordRaw[] = [
               authority: [
                 'cloudmold:quality:procurement-receipt-inspection:query',
               ],
+            },
+          },
+          {
+            path: 'supplier-returns',
+            name: 'CloudMoldSupplierReturn',
+            component: () =>
+              import('#/views/cloudmold/warehouse/supplier-return/index.vue'),
+            meta: {
+              title: '供应商退供',
+              authority: ['cloudmold:warehouse:supplier-return:query'],
             },
           },
         ],

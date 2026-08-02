@@ -3,8 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { requestClient } from '#/api/request';
 
 import {
+  getCloudMoldInventoryScrapPage,
+  getCloudMoldStockCountPage,
   getCloudMoldStockTransfer,
   getCloudMoldStockTransferPage,
+  getCloudMoldSupplierReturnPage,
 } from './index';
 
 vi.mock('#/api/request', () => ({
@@ -28,6 +31,30 @@ describe('cloudmold canonical stock-transfer api', () => {
     expect(requestClient.get).toHaveBeenCalledWith(
       '/cloudmold/warehouse/stock-transfers/get',
       { params: { requestId: 'request-id' } },
+    );
+  });
+
+  it('queries each Warehouse-owned formal document endpoint', async () => {
+    const params = { pageNo: 1, pageSize: 20 };
+
+    await getCloudMoldSupplierReturnPage(params);
+    await getCloudMoldStockCountPage(params);
+    await getCloudMoldInventoryScrapPage(params);
+
+    expect(requestClient.get).toHaveBeenNthCalledWith(
+      1,
+      '/cloudmold/warehouse/supplier-returns/page',
+      { params },
+    );
+    expect(requestClient.get).toHaveBeenNthCalledWith(
+      2,
+      '/cloudmold/warehouse/stock-counts/page',
+      { params },
+    );
+    expect(requestClient.get).toHaveBeenNthCalledWith(
+      3,
+      '/cloudmold/warehouse/inventory-scraps/page',
+      { params },
     );
   });
 });

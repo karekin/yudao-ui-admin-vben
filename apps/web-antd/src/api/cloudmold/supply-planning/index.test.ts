@@ -4,6 +4,8 @@ import { requestClient } from '#/api/request';
 
 import {
   executeSupplyPlanningCommand,
+  getInventoryHealthSnapshotPage,
+  getSafetyStockPolicyPage,
   getSupplyPlanningWorkItemPage,
 } from './index';
 
@@ -90,6 +92,24 @@ describe('cloudmold supply-planning api', () => {
           targetWarehouseId: 'warehouse-target',
         },
       }),
+    );
+  });
+
+  it('queries versioned inventory-control records from supply planning', async () => {
+    const params = { pageNo: 1, pageSize: 20 };
+
+    await getSafetyStockPolicyPage(params);
+    await getInventoryHealthSnapshotPage(params);
+
+    expect(requestClient.get).toHaveBeenNthCalledWith(
+      1,
+      '/cloudmold/supply-planning/safety-stock-policies/page',
+      { params },
+    );
+    expect(requestClient.get).toHaveBeenNthCalledWith(
+      2,
+      '/cloudmold/supply-planning/inventory-health-snapshots/page',
+      { params },
     );
   });
 });
