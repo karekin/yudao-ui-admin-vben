@@ -192,6 +192,137 @@ export namespace CloudMoldInventoryApi {
     skuCode?: string;
     warehouseCode?: string;
   }
+
+  export interface Lot {
+    allocationEligibility: string;
+    canonicalSkuId: string;
+    eligibilityAt: string;
+    expiresOn?: string;
+    lotCode: string;
+    lotId: string;
+    mappedSourceId?: string;
+    mappedSourceSystem?: string;
+    mappedSourceType?: string;
+    manufacturedOn?: string;
+    mappingId?: string;
+    mappingStatus?: string;
+    mappingValidFrom?: string;
+    mappingValidTo?: string;
+    mappingVersion?: number;
+    ownerId: string;
+    ownerType: string;
+    receivedAt?: string;
+    status: string;
+    version: number;
+  }
+
+  export interface LotAvailability {
+    aggregateVersion: number;
+    allocatableQuantity: string;
+    allocationEligibility: string;
+    balanceId: string;
+    baseUomCode: string;
+    canonicalSkuId: string;
+    eligibilityAt: string;
+    inTransitQuantity: string;
+    locationId: string;
+    lotId?: string;
+    onHandQuantity: string;
+    ownerId: string;
+    ownerType: string;
+    qualityStatus: string;
+    reservedQuantity: string;
+    stockStatus: string;
+    unreservedQuantity: string;
+    warehouseId: string;
+  }
+
+  export interface AgingSnapshot {
+    ageAgingMaxDays: number;
+    ageFreshMaxDays: number;
+    ageStaleMaxDays: number;
+    bucketPolicyCode: string;
+    bucketPolicyHash: string;
+    bucketPolicyVersion: string;
+    createdAt: string;
+    expiryCriticalMaxDays: number;
+    expiryWarningMaxDays: number;
+    ledgerWatermarkOccurredAt?: string;
+    ledgerWatermarkRef: string;
+    lineCount: number;
+    lines?: AgingSnapshotLine[];
+    ownerId: string;
+    ownerType: string;
+    snapshotCode: string;
+    snapshotDate: string;
+    snapshotId: string;
+    snapshotVersion: number;
+    status: string;
+    unknownAgeCount: number;
+    unknownExpiryCount: number;
+    warehouseId: string;
+  }
+
+  export interface AgingSnapshotLine {
+    ageBasisAt?: string;
+    ageBasisType: string;
+    ageBucket?: string;
+    ageDays?: number;
+    availableQuantity: string;
+    balanceId: string;
+    balanceVersion: number;
+    baseUomCode: string;
+    canonicalSkuId: string;
+    expiryBucket?: string;
+    expiryDaysRemaining?: number;
+    expiryStatus?: string;
+    expiresOn?: string;
+    inTransitQuantity: string;
+    lineId: number;
+    locationId: string;
+    lotCode?: string;
+    lotId?: string;
+    manufacturedOn?: string;
+    onHandQuantity: string;
+    ownerId: string;
+    ownerType: string;
+    qualityStatus: string;
+    riskClassification: string;
+    reservedQuantity: string;
+    stockStatus: string;
+    warehouseId: string;
+  }
+
+  export interface AgingSnapshotPageParams extends PageParam {
+    keyword?: string;
+  }
+
+  export interface AgingSnapshotCommand {
+    ageAgingMaxDays: number;
+    ageFreshMaxDays: number;
+    ageStaleMaxDays: number;
+    bucketPolicyCode: string;
+    bucketPolicyVersion: string;
+    correlationId: string;
+    expiryCriticalMaxDays: number;
+    expiryWarningMaxDays: number;
+    idempotencyKey: string;
+    occurredAt: string;
+    ownerId: string;
+    ownerType: string;
+    sourceEventId: string;
+    warehouseId: string;
+  }
+
+  export interface AgingSnapshotCommandResult {
+    duplicate: boolean;
+    lineCount: number;
+    operationId: number;
+    snapshotCode: string;
+    snapshotId: string;
+    snapshotVersion: number;
+    status: string;
+  }
 }
 
 export function getCloudMoldInventoryBalancePage(
@@ -226,6 +357,47 @@ export function getCloudMoldInventoryLedgerPage(
   return requestClient.get<PageResult<CloudMoldInventoryApi.LedgerEntry>>(
     '/cloudmold/inventory/v3/ledger/page',
     { params },
+  );
+}
+
+export function getCloudMoldInventoryLot(lotId: string, eligibilityAt: string) {
+  return requestClient.get<CloudMoldInventoryApi.Lot>(
+    `/cloudmold/inventory/v3/lots/${encodeURIComponent(lotId)}`,
+    { params: { eligibilityAt } },
+  );
+}
+
+export function getCloudMoldInventoryLotAvailability(
+  lotId: string,
+  eligibilityAt: string,
+) {
+  return requestClient.get<CloudMoldInventoryApi.LotAvailability[]>(
+    `/cloudmold/inventory/v3/lots/${encodeURIComponent(lotId)}/availability`,
+    { params: { eligibilityAt } },
+  );
+}
+
+export function getCloudMoldInventoryAgingSnapshotPage(
+  params: CloudMoldInventoryApi.AgingSnapshotPageParams,
+) {
+  return requestClient.get<PageResult<CloudMoldInventoryApi.AgingSnapshot>>(
+    '/cloudmold/inventory/v3/aging-snapshots/page',
+    { params },
+  );
+}
+
+export function getCloudMoldInventoryAgingSnapshot(snapshotId: string) {
+  return requestClient.get<CloudMoldInventoryApi.AgingSnapshot>(
+    `/cloudmold/inventory/v3/aging-snapshots/${encodeURIComponent(snapshotId)}`,
+  );
+}
+
+export function captureCloudMoldInventoryAgingSnapshot(
+  command: CloudMoldInventoryApi.AgingSnapshotCommand,
+) {
+  return requestClient.post<CloudMoldInventoryApi.AgingSnapshotCommandResult>(
+    '/cloudmold/inventory/v3/aging-snapshots/command',
+    command,
   );
 }
 

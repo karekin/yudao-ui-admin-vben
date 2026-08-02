@@ -242,6 +242,16 @@ const routes: RouteRecordRaw[] = [
               authority: ['cloudmold:supply-planning:health-snapshot:query'],
             },
           },
+          {
+            path: 'lot-aging',
+            name: 'CloudMoldInventoryLotAging',
+            component: () =>
+              import('#/views/cloudmold/inventory/lot-aging/index.vue'),
+            meta: {
+              title: '库存库龄与效期明细',
+              authority: ['cloudmold:inventory:aging-snapshot:query'],
+            },
+          },
         ],
       },
       {
@@ -353,6 +363,28 @@ const routes: RouteRecordRaw[] = [
               title: '供应商发票匹配详情',
               hideInMenu: true,
               authority: ['cloudmold:finance:procure-to-pay:query'],
+            },
+          },
+          {
+            path: 'voucher-trace',
+            name: 'CloudMoldFinanceVoucherTrace',
+            component: () =>
+              import('#/views/cloudmold/finance/voucher-trace/index.vue'),
+            meta: {
+              title: '财务影响与凭证追踪',
+              authority: ['cloudmold:finance:financial-impact:query'],
+            },
+          },
+          {
+            path: 'reconciliations',
+            name: 'CloudMoldFinanceReconciliation',
+            component: () =>
+              import('#/views/cloudmold/finance/reconciliation/index.vue'),
+            meta: {
+              title: '采购—库存—财务三账对账',
+              authority: [
+                'cloudmold:finance:procure-to-pay:reconciliation:query',
+              ],
             },
           },
         ],

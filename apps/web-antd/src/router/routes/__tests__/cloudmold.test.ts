@@ -38,7 +38,7 @@ describe('cloudmold administration navigation', () => {
     ).toEqual(groups.map(([, title]) => title));
     expect(
       groups.map(([name]) => childByName(root, name)?.children?.length),
-    ).toEqual([2, 2, 5, 3, 7, 7, 2, 4, 1]);
+    ).toEqual([2, 2, 5, 3, 8, 7, 4, 4, 1]);
   });
 
   it('uses operator-facing labels instead of canonical-model terminology', () => {
@@ -80,6 +80,7 @@ describe('cloudmold administration navigation', () => {
       '库存健康',
       '安全库存策略',
       '库存健康快照',
+      '库存库龄与效期明细',
       '采购申请',
       '寻源与定标',
       '采购订单',
@@ -89,6 +90,8 @@ describe('cloudmold administration navigation', () => {
       '供应商退供',
       '应付与匹配',
       '供应商发票匹配详情',
+      '财务影响与凭证追踪',
+      '采购—库存—财务三账对账',
       '订单管理',
       '支付记录',
       '发货履约',
@@ -120,6 +123,15 @@ describe('cloudmold administration navigation', () => {
       router.resolve('/cloudmold/inventory-control/inventory-health-snapshots')
         .name,
     ).toBe('CloudMoldInventoryHealthSnapshot');
+    expect(router.resolve('/cloudmold/inventory-control/lot-aging').name).toBe(
+      'CloudMoldInventoryLotAging',
+    );
+    expect(router.resolve('/cloudmold/finance-center/voucher-trace').name).toBe(
+      'CloudMoldFinanceVoucherTrace',
+    );
+    expect(
+      router.resolve('/cloudmold/finance-center/reconciliations').name,
+    ).toBe('CloudMoldFinanceReconciliation');
   });
 
   it('registers CloudMold-only procurement and finance workbenches with hidden details', () => {
@@ -137,6 +149,11 @@ describe('cloudmold administration navigation', () => {
     const invoiceDetail = childByName(
       finance,
       'CloudMoldSupplierInvoiceDetail',
+    );
+    const voucherTrace = childByName(finance, 'CloudMoldFinanceVoucherTrace');
+    const reconciliation = childByName(
+      finance,
+      'CloudMoldFinanceReconciliation',
     );
 
     expect(procurementWorkbench?.path).toBe('workbench');
@@ -162,6 +179,14 @@ describe('cloudmold administration navigation', () => {
     expect(invoiceDetail?.meta?.authority).toEqual([
       'cloudmold:finance:procure-to-pay:query',
     ]);
+    expect(voucherTrace?.path).toBe('voucher-trace');
+    expect(voucherTrace?.meta?.authority).toEqual([
+      'cloudmold:finance:financial-impact:query',
+    ]);
+    expect(reconciliation?.path).toBe('reconciliations');
+    expect(reconciliation?.meta?.authority).toEqual([
+      'cloudmold:finance:procure-to-pay:reconciliation:query',
+    ]);
 
     const router = createRouter({
       history: createMemoryHistory(),
@@ -180,6 +205,12 @@ describe('cloudmold administration navigation', () => {
       router.resolve('/cloudmold/finance-center/supplier-invoices/invoice-1')
         .name,
     ).toBe('CloudMoldSupplierInvoiceDetail');
+    expect(router.resolve('/cloudmold/finance-center/voucher-trace').name).toBe(
+      'CloudMoldFinanceVoucherTrace',
+    );
+    expect(
+      router.resolve('/cloudmold/finance-center/reconciliations').name,
+    ).toBe('CloudMoldFinanceReconciliation');
   });
 
   it('registers final Figma-backed inbound and incoming-quality workbenches', () => {
@@ -305,13 +336,13 @@ describe('cloudmold administration navigation', () => {
       (route) => route.component && route.meta?.hideInMenu,
     ).length;
 
-    expect(groupedPageCount).toBe(33);
+    expect(groupedPageCount).toBe(36);
     expect(directOperationsPageCount).toBe(14);
     expect(operationsRoot.meta?.hideInMenu).toBe(true);
     expect(hiddenDirectPageCount).toBe(4);
     expect(
       groupedPageCount! + directOperationsPageCount! + hiddenDirectPageCount!,
-    ).toBe(51);
+    ).toBe(54);
   });
 
   it('registers L3 diagnostics as stable routes outside backend menus', () => {
