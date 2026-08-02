@@ -34,7 +34,7 @@ describe('cloudmold administration navigation', () => {
     ).toEqual(groups.map(([, title]) => title));
     expect(
       groups.map(([name]) => childByName(root, name)?.children?.length),
-    ).toEqual([2, 2, 2, 4, 1]);
+    ).toEqual([2, 2, 3, 4, 1]);
   });
 
   it('uses operator-facing labels instead of canonical-model terminology', () => {
@@ -59,6 +59,7 @@ describe('cloudmold administration navigation', () => {
       '经营主体与授权',
       '库存管理',
       '仓库与库位',
+      '库存调拨',
       '订单管理',
       '支付记录',
       '发货履约',
@@ -105,6 +106,7 @@ describe('cloudmold administration navigation', () => {
       'CloudMoldLegacyIdentityRedirect',
       'CloudMoldLegacyInventoryRedirect',
       'CloudMoldLegacyWarehouseRedirect',
+      'CloudMoldLegacyStockTransferRedirect',
       'CloudMoldLegacyOrderRedirect',
       'CloudMoldLegacyPaymentRedirect',
       'CloudMoldLegacyFulfillmentRedirect',
@@ -151,13 +153,13 @@ describe('cloudmold administration navigation', () => {
       (route) => route.component && route.meta?.hideInMenu,
     ).length;
 
-    expect(groupedPageCount).toBe(11);
+    expect(groupedPageCount).toBe(12);
     expect(directOperationsPageCount).toBe(14);
     expect(operationsRoot.meta?.hideInMenu).toBe(true);
     expect(hiddenDirectPageCount).toBe(4);
     expect(
       groupedPageCount! + directOperationsPageCount! + hiddenDirectPageCount!,
-    ).toBe(29);
+    ).toBe(30);
   });
 
   it('registers L3 diagnostics as stable routes outside backend menus', () => {

@@ -60,21 +60,18 @@ describe('cloudmold supply-planning api', () => {
     );
   });
 
-  it('preserves governed replenishment PREPARE mapping fields', async () => {
+  it('sends only canonical stock-transfer dimensions', async () => {
     await executeSupplyPlanningCommand({
       operation: 'CONVERT_REPLENISHMENT',
       replenishmentConversion: {
-        accountId: 12,
         convertedByPrincipalId: 'principal-id',
-        erpProductId: 34,
-        erpProductUnitId: 56,
         expectedVersion: 2,
-        mappingEvidenceSha256: 'a'.repeat(64),
+        ownerId: 'merchant-id',
+        ownerType: 'MERCHANT',
         recommendationId: 'replenishment-id',
-        supplierId: 78,
-        targetType: 'PURCHASE_REQUEST',
-        taxPercent: 13,
-        unitCostMinor: 1299,
+        sourceWarehouseId: 'warehouse-source',
+        targetType: 'TRANSFER_REQUEST',
+        targetWarehouseId: 'warehouse-target',
       },
     });
 
@@ -83,17 +80,14 @@ describe('cloudmold supply-planning api', () => {
       expect.objectContaining({
         operation: 'CONVERT_REPLENISHMENT',
         replenishmentConversion: {
-          accountId: 12,
           convertedByPrincipalId: 'principal-id',
-          erpProductId: 34,
-          erpProductUnitId: 56,
           expectedVersion: 2,
-          mappingEvidenceSha256: 'a'.repeat(64),
+          ownerId: 'merchant-id',
+          ownerType: 'MERCHANT',
           recommendationId: 'replenishment-id',
-          supplierId: 78,
-          targetType: 'PURCHASE_REQUEST',
-          taxPercent: 13,
-          unitCostMinor: 1299,
+          sourceWarehouseId: 'warehouse-source',
+          targetType: 'TRANSFER_REQUEST',
+          targetWarehouseId: 'warehouse-target',
         },
       }),
     );

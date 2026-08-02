@@ -99,6 +99,16 @@ const routes: RouteRecordRaw[] = [
               authority: ['cloudmold:warehouse:query'],
             },
           },
+          {
+            path: 'stock-transfers',
+            name: 'CloudMoldStockTransfer',
+            component: () =>
+              import('#/views/cloudmold/stock-transfer/index.vue'),
+            meta: {
+              title: '库存调拨',
+              authority: ['cloudmold:warehouse:query'],
+            },
+          },
         ],
       },
       {
@@ -256,6 +266,12 @@ const routes: RouteRecordRaw[] = [
         name: 'CloudMoldLegacyWarehouseRedirect',
         redirect: '/cloudmold/inventory-warehouse/warehouses',
         meta: { hideInMenu: true, title: '仓库与库位' },
+      },
+      {
+        path: 'stock-transfer',
+        name: 'CloudMoldLegacyStockTransferRedirect',
+        redirect: '/cloudmold/inventory-warehouse/stock-transfers',
+        meta: { hideInMenu: true, title: '库存调拨' },
       },
       {
         path: 'order',

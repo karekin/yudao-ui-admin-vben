@@ -63,29 +63,21 @@ export namespace CloudMoldSupplyPlanningApi {
   }
 
   export interface PurchaseReplenishmentConversion {
-    accountId: number;
     convertedByPrincipalId: string;
-    erpProductId: number;
-    erpProductUnitId: number;
     expectedVersion: number;
-    mappingEvidenceSha256: string;
     recommendationId: string;
-    supplierId: number;
     targetType: 'PURCHASE_REQUEST';
-    taxPercent: number;
-    unitCostMinor: number;
   }
 
   export interface TransferReplenishmentConversion {
     convertedByPrincipalId: string;
     expectedVersion: number;
-    mappingEvidenceSha256: string;
+    ownerId: string;
+    ownerType: string;
     recommendationId: string;
-    sourceWarehouseId: number;
+    sourceWarehouseId: string;
     targetType: 'TRANSFER_REQUEST';
-    targetWarehouseId: number;
-    unitCostMinor: number;
-    wmsSkuId: number;
+    targetWarehouseId: string;
   }
 
   export type ReplenishmentConversion =
