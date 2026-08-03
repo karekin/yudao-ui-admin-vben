@@ -20,7 +20,6 @@ import { useRoute } from 'vue-router';
 import { useAccess } from '@vben/access';
 import { Page } from '@vben/common-ui';
 import { useUserStore } from '@vben/stores';
-import { renderSkillMarkdown } from './skill-markdown';
 
 import {
   Alert,
@@ -96,6 +95,7 @@ import {
   useTemporalScheduleFormSchema,
   workflowRunStatusMeta,
 } from './data';
+import { renderSkillMarkdown } from './skill-markdown';
 
 import '../shared/tabbed-grid.css';
 
@@ -587,7 +587,7 @@ const businessObjectCategoryLabels: Record<string, string> = {
   MES_PRODUCTION_FEEDBACK: '生产报工',
   MES_PRODUCTION_TASK: '生产任务',
   MES_WORK_ORDER: '生产工单',
-  MERCHANT: '商家资料',
+  MERCHANT: '经营主体',
   NOTIFICATION_CAMPAIGN: '营销活动',
   NOTIFICATION_DELIVERY: '营销触达',
   ORDER: '交易订单',
@@ -596,14 +596,52 @@ const businessObjectCategoryLabels: Record<string, string> = {
   PROCUREMENT_ORDER: '补货采购单',
   PRODUCT: '商品资料',
   SETTLEMENT: '合作结算',
-  SHOP: '店铺资料',
+  SHOP: '经营店铺',
   SKU: '商品 SKU',
   SUPPLIER_SOURCING: '供应商寻源单',
   SPU: '商品款式',
-  WAREHOUSE: '仓库资料',
+  WAREHOUSE: '仓网节点',
   WAREHOUSE_MOVEMENT: '仓间调拨单',
   WAREHOUSE_RECEIPT: '采购收货单',
   WAREHOUSE_SHIPMENT: '销售出库单',
+};
+
+const businessObjectDeliveryLabels: Record<string, string> = {
+  AFTERSALE: '售后处置已完成',
+  CAMPAIGN: '营销活动已落地',
+  FULFILLMENT: '履约交接已完成',
+  FULFILLMENT_EXCEPTION: '履约异常已处置',
+  INVENTORY: '库存台账已更新',
+  LISTING: '商品刊登已发布',
+  MERCHANT: '经营主体已建立',
+  ORDER: '交易订单已生成',
+  PROCUREMENT_ORDER: '采购订单已下发',
+  PRODUCT: '商品已建档',
+  SHOP: '经营店铺已绑定',
+  SKU: '商品 SKU 已纳管',
+  SUPPLIER_SOURCING: '供应商寻源已完成',
+  WAREHOUSE: '仓网节点已就绪',
+  WAREHOUSE_MOVEMENT: '仓间调拨已完成',
+  WAREHOUSE_RECEIPT: '采购收货已完成',
+  WAREHOUSE_SHIPMENT: '销售出库已完成',
+};
+
+const businessObjectImpactLabels: Record<string, string> = {
+  AFTERSALE: '售后责任已闭环，可继续退款或逆向结算。',
+  FULFILLMENT: '履约责任已交接，订单可进入下一履约节点。',
+  FULFILLMENT_EXCEPTION: '异常已有明确处置结果与责任归属。',
+  INVENTORY: '库存台账已记录，可用于后续可用库存与对账。',
+  MERCHANT: '经营主体已就绪，可承接采购、库存和结算单据。',
+  ORDER: '交易订单已建立，可进入发货与履约执行。',
+  PROCUREMENT_ORDER: '采购责任已下发，可进入到货、质检与收货。',
+  PRODUCT: '商品资料已就绪，可继续维护 SKU 和供应链属性。',
+  SHOP: '经营店铺已就绪，可承接商品与交易链路。',
+  SKU: '商品 SKU 已纳入本次计划与库存执行范围。',
+  SUPPLIER_SOURCING: '供应商选择已形成可追溯的采购决策依据。',
+  WAREHOUSE: '仓库节点已纳入仓网，可承接收货、调拨和出库。',
+  WAREHOUSE_MOVEMENT: '源仓、在途与目标仓的库存责任已完成转移。',
+  WAREHOUSE_RECEIPT: '供应商到货已确认，并形成可入账的收货依据。',
+  WAREHOUSE_SHIPMENT: '销售出库已确认，库存与履约链路已同步推进。',
 };
 
 const businessObjectStatusLabels: Record<string, string> = {
@@ -634,10 +672,25 @@ function businessObjectCategory(
   return businessObjectCategoryLabels[object.objectType] ?? '业务数据';
 }
 
+function businessObjectDeliveryLabel(
+  object: CloudMoldAiOperationsApi.ManagedBusinessObject,
+) {
+  return businessObjectDeliveryLabels[object.objectType] ?? object.label;
+}
+
+function businessObjectImpact(
+  object: CloudMoldAiOperationsApi.ManagedBusinessObject,
+) {
+  return (
+    businessObjectImpactLabels[object.objectType] ??
+    '该业务对象已写入并可通过业务编号继续追溯。'
+  );
+}
+
 function businessObjectReference(
   object: CloudMoldAiOperationsApi.ManagedBusinessObject,
 ) {
-  return object.businessCode || '已写入或确认，业务编号暂未提供';
+  return object.businessCode || '已写入（该对象不以业务单据编号呈现）';
 }
 
 function businessObjectStatus(
@@ -656,38 +709,42 @@ function businessDeliveryTitle(
   detail?: CloudMoldAiOperationsApi.ManagedRunDetail,
 ) {
   const count = collectBusinessObjects(detail).length;
-  return `本次交付物${count ? ` · ${count} 项` : ''}`;
+  return `单据链路与业务影响${count ? ` · ${count} 项` : ''}`;
 }
 
-function buildBusinessTimeline(
+type BusinessActionRow = CloudMoldAiOperationsApi.ManagedBusinessAction & {
+  key: string;
+  phaseName: string;
+};
+
+function buildBusinessActions(
   detail?: CloudMoldAiOperationsApi.ManagedRunDetail,
+): BusinessActionRow[] {
+  return (detail?.businessPhases ?? []).flatMap((phase) =>
+    (phase.actions ?? []).map((action, index) => ({
+      ...action,
+      key: `${phase.phaseCode}-${action.taskId}-${action.stepCode}-${index}`,
+      phaseName: phase.displayName || phase.phaseCode || '业务阶段',
+    })),
+  );
+}
+
+function businessObjectSourceAction(
+  detail: CloudMoldAiOperationsApi.ManagedRunDetail | undefined,
+  object: CloudMoldAiOperationsApi.ManagedBusinessObject,
 ) {
-  const rows =
-    detail?.businessPhases?.map((phase, index) => ({
-      key: `${phase.phaseCode || 'phase'}-${index}`,
-      title: phase.displayName || phase.phaseCode || `阶段 ${index + 1}`,
-      status: phase.status,
-      description:
-        phase.businessOutcome?.summary ||
-        phase.description ||
-        (phase.actions?.length
-          ? `包含 ${phase.actions.length} 个业务动作`
-          : '等待该阶段沉淀业务结果'),
-      startedAt: phase.startedAt,
-      completedAt: phase.completedAt,
-    })) || [];
-  if (rows.length > 0) return rows;
-  if (!detail?.task) return [];
-  return [
-    {
-      key: detail.task.taskId,
-      title: '当前运行',
-      status: detail.task.status,
-      description: detailOutcomeSummary(detail),
-      startedAt: detail.task.startedAt || detail.task.createdAt,
-      completedAt: detail.task.completedAt,
-    },
-  ];
+  const matchingAction = buildBusinessActions(detail).find((action) =>
+    action.businessObjects.some(
+      (candidate) =>
+        candidate.objectType === object.objectType &&
+        ((!!object.businessId && candidate.businessId === object.businessId) ||
+          (!!object.businessCode &&
+            candidate.businessCode === object.businessCode)),
+    ),
+  );
+  return matchingAction
+    ? `${matchingAction.phaseName} · ${matchingAction.displayName}`
+    : '由本次工作流汇总确认';
 }
 
 function buildApprovalResponsibility(
@@ -2048,10 +2105,8 @@ onMounted(() => {
         <section class="approval-workspace">
           <div class="approval-gate-note" aria-label="BPM 审批门禁说明">
             <StatusTag color="processing" label="BPM 审批门禁" />
-            <span
-              >指定审批人 → 工作流程待办 → 人工办理 → 安全确认 → 自动恢复
-              Agent</span
-            >
+            <span>指定审批人 → 工作流程待办 → 人工办理 → 安全确认 → 自动恢复
+              Agent</span>
             <span class="approval-gate-note-muted">
               已安全确认的记录会显示为“等待执行”，不会计入审批阻塞。
             </span>
@@ -2423,28 +2478,62 @@ onMounted(() => {
             </Space>
           </Card>
 
-          <Card size="small" title="业务时间线">
-            <div
-              v-for="phase in buildBusinessTimeline(detailData)"
-              :key="phase.key"
-              class="border-b border-border py-3 last:border-b-0"
-            >
-              <div class="flex items-center justify-between gap-3">
-                <Space>
-                  <Typography.Text strong>{{ phase.title }}</Typography.Text>
-                  <StatusTag
-                    v-bind="getMeta(workflowRunStatusMeta, phase.status)"
-                  />
-                </Space>
-                <Typography.Text type="secondary">
-                  {{ formatWhen(phase.completedAt || phase.startedAt) }}
-                </Typography.Text>
-              </div>
-              <Typography.Paragraph
-                class="mb-0 mt-2 text-sm text-muted-foreground"
+          <Card size="small" title="实际完成的业务动作">
+            <Typography.Paragraph class="mb-3 text-sm text-muted-foreground">
+              这里按真实执行顺序说明 Agent
+              做了什么。只有已实际执行的动作会出现；计划、候选或未放行事项不会混入结果。
+            </Typography.Paragraph>
+            <Empty
+              v-if="!buildBusinessActions(detailData).length"
+              description="当前尚未产生可展示的实际业务动作"
+            />
+            <div v-else class="business-action-chain">
+              <div
+                v-for="action in buildBusinessActions(detailData)"
+                :key="action.key"
+                class="business-action-chain__item"
               >
-                {{ phase.description }}
-              </Typography.Paragraph>
+                <div class="business-action-chain__rail"></div>
+                <div class="business-action-chain__content">
+                  <div
+                    class="flex flex-wrap items-center justify-between gap-2"
+                  >
+                    <Space wrap :size="[8, 6]">
+                      <Typography.Text strong>
+                        {{ action.displayName }}
+                      </Typography.Text>
+                      <StatusTag
+                        v-bind="getMeta(workflowRunStatusMeta, action.status)"
+                      />
+                      <StatusTag color="processing" :label="action.phaseName" />
+                    </Space>
+                    <Typography.Text type="secondary" class="text-xs">
+                      {{ formatWhen(action.completedAt || action.startedAt) }}
+                    </Typography.Text>
+                  </div>
+                  <Typography.Paragraph
+                    class="mb-0 mt-2 text-sm text-muted-foreground"
+                  >
+                    {{
+                      action.resultSummary ||
+                      '该动作已完成，未返回额外业务摘要。'
+                    }}
+                  </Typography.Paragraph>
+                  <Space
+                    v-if="action.businessObjects.length"
+                    wrap
+                    class="mt-2"
+                    :size="[6, 6]"
+                  >
+                    <StatusTag
+                      v-for="object in action.businessObjects"
+                      :key="`${action.key}-${object.objectType}-${object.businessId || object.businessCode || object.label}`"
+                      color="default"
+                      :label="`${businessObjectDeliveryLabel(object)}${object.businessCode ? ` · ${object.businessCode}` : ''}`"
+                    />
+                  </Space>
+                </div>
+              </div>
             </div>
           </Card>
 
@@ -2462,29 +2551,38 @@ onMounted(() => {
 
           <Card size="small" :title="businessDeliveryTitle(detailData)">
             <Typography.Paragraph class="mb-3 text-sm text-muted-foreground">
-              这里展示本次运行实际写入或确认的业务数据；业务编号可用于后续查询，内部
-              ID 与执行证据收在下方。
+              每一项都说明其业务含义、来源动作和对供应链的影响。业务编号可用于后续查询；内部
+              ID 与技术证据收在下方。
             </Typography.Paragraph>
             <Empty
               v-if="!collectBusinessObjects(detailData).length"
-              description="当前尚未产生可展示的业务数据"
+              description="当前尚未产生可追溯的业务单据或执行对象"
             />
             <Descriptions v-else :column="1" bordered size="small">
               <DescriptionsItem
                 v-for="(item, index) in collectBusinessObjects(detailData)"
                 :key="`${item.objectType}-${item.businessId || item.businessCode || index}`"
-                :label="item.label"
+                :label="businessObjectDeliveryLabel(item)"
               >
-                <Space wrap>
-                  <StatusTag
-                    color="processing"
-                    :label="businessObjectCategory(item)"
-                  />
-                  <Typography.Text type="secondary">
-                    {{ businessObjectReference(item) }}
-                  </Typography.Text>
-                  <StatusTag v-bind="businessObjectStatus(item)" />
-                </Space>
+                <div class="business-delivery-item">
+                  <Space wrap :size="[8, 6]">
+                    <StatusTag
+                      color="processing"
+                      :label="businessObjectCategory(item)"
+                    />
+                    <Typography.Text>{{ item.label }}</Typography.Text>
+                    <Typography.Text type="secondary">
+                      {{ businessObjectReference(item) }}
+                    </Typography.Text>
+                    <StatusTag v-bind="businessObjectStatus(item)" />
+                  </Space>
+                  <Typography.Paragraph
+                    class="mb-0 mt-1 text-xs text-muted-foreground"
+                  >
+                    {{ businessObjectImpact(item) }}
+                    来源：{{ businessObjectSourceAction(detailData, item) }}。
+                  </Typography.Paragraph>
+                </div>
               </DescriptionsItem>
             </Descriptions>
           </Card>
@@ -2568,6 +2666,56 @@ onMounted(() => {
   background: hsl(var(--muted) / 28%);
   border: 1px solid hsl(var(--border));
   border-radius: 14px;
+}
+
+.business-action-chain {
+  display: grid;
+  gap: 0;
+}
+
+.business-action-chain__item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  padding: 0 0 16px;
+}
+
+.business-action-chain__item:last-child {
+  padding-bottom: 0;
+}
+
+.business-action-chain__rail {
+  position: relative;
+  width: 2px;
+  height: 100%;
+  margin-left: 8px;
+  background: hsl(var(--primary) / 24%);
+}
+
+.business-action-chain__rail::before {
+  position: absolute;
+  top: 4px;
+  left: -4px;
+  width: 10px;
+  height: 10px;
+  content: '';
+  background: hsl(var(--primary));
+  border: 2px solid hsl(var(--background));
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 35%);
+}
+
+.business-action-chain__content {
+  min-width: 0;
+  padding: 12px 14px;
+  background: hsl(var(--muted) / 36%);
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+}
+
+.business-delivery-item {
+  min-width: 0;
 }
 
 .role-capability-domain-heading {
