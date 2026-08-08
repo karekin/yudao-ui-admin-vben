@@ -88,3 +88,9 @@ export function getCloudMoldSalesContract(salesContractId: string) {
     `/cloudmold/crm/sales-contracts/${encodeURIComponent(salesContractId)}`,
   );
 }
+
+export function listCloudMoldSalesContracts() {
+  return requestClient.get<CloudMoldSalesContractView[]>(
+    '/cloudmold/crm/sales-contracts/page',
+  );
+}

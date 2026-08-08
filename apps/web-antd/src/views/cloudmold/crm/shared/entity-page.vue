@@ -249,23 +249,25 @@ function resetActionForm(): ActionFormState {
 }
 
 function isCustomerRow(row: EntityRow): row is CloudMoldCrmCustomerView {
-  return 'customerId' in row && 'customerName' in row;
+  // row 运行时可能为 undefined(如 currentRow 未选中时模板即求值),
+  // 需空值守卫,否则 'xxx' in undefined 会抛 TypeError
+  return !!row && 'customerId' in row && 'customerName' in row;
 }
 
 function isLeadRow(row: EntityRow): row is CloudMoldCrmLeadView {
-  return 'leadId' in row;
+  return !!row && 'leadId' in row;
 }
 
 function isContactRow(row: EntityRow): row is CloudMoldCrmContactView {
-  return 'contactId' in row;
+  return !!row && 'contactId' in row;
 }
 
 function isOpportunityRow(row: EntityRow): row is CloudMoldCrmOpportunityView {
-  return 'opportunityId' in row;
+  return !!row && 'opportunityId' in row;
 }
 
 function isFollowUpRow(row: EntityRow): row is CloudMoldCrmFollowUpView {
-  return 'followUpId' in row;
+  return !!row && 'followUpId' in row;
 }
 
 function rowId(row: EntityRow) {
@@ -311,6 +313,26 @@ function rowOwner(row: EntityRow) {
   return '—';
 }
 
+function readableRef(value?: string, label = '业务对象') {
+  if (!value) return '—';
+  const raw = value.replace(/^restricted:/, '');
+  if (/^[0-9a-f-]{20,}$/i.test(raw)) {
+    return `${label} · ${raw.replaceAll('-', '').slice(-6).toUpperCase()}`;
+  }
+  return raw.length > 28 ? `${raw.slice(0, 12)}…${raw.slice(-6)}` : raw;
+}
+
+function readableOwner(value?: string) {
+  if (!value) return '未分配';
+  return `客户与销售运营 · ${readableRef(value, '主体')}`;
+}
+
+function readableChannel(value?: string) {
+  if (!value) return '未登记渠道';
+  if (value.startsWith('restricted:')) return '受控渠道 · 已脱敏';
+  return readableRef(value, '渠道');
+}
+
 function rowContact(row: EntityRow) {
   if (isLeadRow(row) || isContactRow(row)) {
     return {
@@ -322,10 +344,12 @@ function rowContact(row: EntityRow) {
 }
 
 function rowRelated(row: EntityRow) {
-  if (isContactRow(row)) return row.customerId;
-  if (isOpportunityRow(row)) return row.customerId;
+  if (isContactRow(row)) return readableRef(row.customerId, '客户');
+  if (isOpportunityRow(row)) return readableRef(row.customerId, '客户');
   if (isFollowUpRow(row)) {
-    return [row.subjectType, row.subjectId].filter(Boolean).join(' / ');
+    return [row.subjectType, readableRef(row.subjectId, '主体')]
+      .filter(Boolean)
+      .join(' / ');
   }
   return '—';
 }
@@ -756,15 +780,13 @@ onMounted(() => {
             />
           </template>
           <template v-else-if="column.key === 'owner'">
-            <span>{{ rowOwner(asEntityRow(record)) || '—' }}</span>
+            <span>{{ readableOwner(rowOwner(asEntityRow(record))) }}</span>
           </template>
           <template v-else-if="column.key === 'contact'">
             <div class="flex flex-col gap-1">
               <span>{{ rowContact(asEntityRow(record))?.masked || '—' }}</span>
               <span class="text-xs text-[var(--ant-color-text-description)]">
-                {{
-                  rowContact(asEntityRow(record))?.channel || '未登记渠道引用'
-                }}
+                {{ readableChannel(rowContact(asEntityRow(record))?.channel) }}
               </span>
             </div>
           </template>

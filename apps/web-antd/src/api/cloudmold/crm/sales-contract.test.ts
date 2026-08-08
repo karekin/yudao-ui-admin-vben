@@ -5,6 +5,7 @@ import { requestClient } from '#/api/request';
 import {
   executeSalesContractCommand,
   getCloudMoldSalesContract,
+  listCloudMoldSalesContracts,
   SALES_CONTRACT_OPERATIONS,
 } from './sales-contract';
 
@@ -23,6 +24,14 @@ describe('cloudmold crm sales contract api', () => {
 
     expect(requestClient.get).toHaveBeenCalledWith(
       '/cloudmold/crm/sales-contracts/contract%2F1',
+    );
+  });
+
+  it('lists canonical sales contracts for the workbench', async () => {
+    await listCloudMoldSalesContracts();
+
+    expect(requestClient.get).toHaveBeenCalledWith(
+      '/cloudmold/crm/sales-contracts/page',
     );
   });
 

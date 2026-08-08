@@ -5,7 +5,7 @@ import type {
   CloudMoldSalesContractItem,
 } from '#/api/cloudmold/crm/sales-contract';
 
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 
 import { Page } from '@vben/common-ui';
 
@@ -33,6 +33,7 @@ import { getCloudMoldSalesContractReceivablesSummary } from '#/api/cloudmold/crm
 import {
   executeSalesContractCommand,
   getCloudMoldSalesContract,
+  listCloudMoldSalesContracts,
   SALES_CONTRACT_OPERATIONS,
 } from '#/api/cloudmold/crm/sales-contract';
 import EvidenceAlert from '#/views/cloudmold/shared/evidence-alert.vue';
@@ -70,6 +71,9 @@ const loadError = ref('');
 const detail = ref<Awaited<
   ReturnType<typeof getCloudMoldSalesContract>
 > | null>(null);
+const contracts = ref<Awaited<ReturnType<typeof listCloudMoldSalesContracts>>>(
+  [],
+);
 const financeLoading = ref(false);
 const financeRows = ref<CloudMoldReceivablesSummaryView[]>([]);
 const draftOpen = ref(false);
@@ -163,6 +167,25 @@ async function loadContract(salesContractId = contractIdInput.value.trim()) {
   } finally {
     loading.value = false;
     financeLoading.value = false;
+  }
+}
+
+async function loadContracts() {
+  try {
+    contracts.value = await listCloudMoldSalesContracts();
+    if (!detail.value && contracts.value[0]) {
+      await loadContract(contracts.value[0].salesContractId);
+    }
+  } catch (error) {
+    message.warning(
+      `合同列表加载失败：${error instanceof Error ? error.message : '请稍后重试'}`,
+    );
+  }
+}
+
+function selectContract(contract: Record<string, any>) {
+  if (typeof contract.salesContractId === 'string') {
+    void loadContract(contract.salesContractId);
   }
 }
 
@@ -311,13 +334,15 @@ async function submitApproval() {
     submitSaving.value = false;
   }
 }
+
+onMounted(loadContracts);
 </script>
 
 <template>
   <Page auto-content-height>
     <EvidenceAlert
       message="CloudMold 销售合同权威"
-      description="本页直连 SalesContractCommand API 与 GET /cloudmold/crm/sales-contracts/{id}；只展示 canonical SKU、seller merchant/shop/legal entity、BPM process id，以及只读 Finance summary。"
+      description="本页直连 SalesContractCommand API、销售合同列表与详情；只展示 canonical SKU、seller merchant/shop/legal entity、BPM process id，以及只读 Finance summary。"
     />
 
     <Card size="small" class="mb-3">
@@ -342,6 +367,50 @@ async function submitApproval() {
           提交审批
         </Button>
       </Space>
+    </Card>
+
+    <Card
+      size="small"
+      title="销售合同"
+      class="mb-3"
+      :loading="loading && !detail"
+    >
+      <Table
+        :columns="[
+          { key: 'contractCode', title: '合同编码', width: 190 },
+          { key: 'contractName', title: '合同名称', width: 260 },
+          { key: 'status', title: '状态', width: 120 },
+          { key: 'totalAmountMinor', title: '合同金额', width: 150 },
+          { key: 'effectiveDate', title: '生效日期', width: 130 },
+          { key: 'updatedAt', title: '更新时间', width: 180 },
+          { key: 'action', title: '操作', width: 90 },
+        ]"
+        :data-source="contracts"
+        :pagination="false"
+        row-key="salesContractId"
+        size="small"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'status'">
+            <StatusTag v-bind="cloudMoldStatusMeta(record.status)" />
+          </template>
+          <template v-else-if="column.key === 'totalAmountMinor'">
+            {{ formatMoney(record.totalAmountMinor, record.currencyCode) }}
+          </template>
+          <template v-else-if="column.key === 'updatedAt'">
+            {{ formatTime(record.updatedAt) }}
+          </template>
+          <template v-else-if="column.key === 'action'">
+            <Button type="link" size="small" @click="selectContract(record)">
+              详情
+            </Button>
+          </template>
+        </template>
+      </Table>
+      <Empty
+        v-if="contracts.length === 0"
+        description="暂无销售合同，完成客户转商机后的合同会自动出现在这里"
+      />
     </Card>
 
     <Alert
@@ -553,8 +622,8 @@ async function submitApproval() {
               </Col>
             </Row>
             <Button danger type="link" @click="removeItemRow(index)">
-删除此行
-</Button>
+              删除此行
+            </Button>
           </Card>
         </Space>
         <Button class="mt-2" type="dashed" @click="addItemRow">新增条目</Button>
